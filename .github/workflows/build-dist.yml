@@ -25,6 +25,13 @@ jobs:
           ref: dev
           fetch-depth: 1
 
+      - name: Checkout Yunzai
+        uses: actions/checkout@v4
+        with:
+          repository: bling-yshs/Yunzai
+          path: yunzai
+          fetch-depth: 1
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -35,18 +42,24 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: yunzai/pnpm-lock.yaml
 
-      - name: Install dependencies
+      - name: Copy plugin into Yunzai workspace
+        run: rsync -a --delete --exclude='.git/' ./ yunzai/plugins/mhy-plugin/
+
+      - name: Install Yunzai workspace dependencies
+        working-directory: yunzai
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm build
+      - name: Build plugin
+        working-directory: yunzai
+        run: pnpm --filter mhy-plugin run build
 
       - name: Upload dist
         uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: dist
+          path: yunzai/plugins/mhy-plugin/dist
           if-no-files-found: error
           retention-days: 1
 
