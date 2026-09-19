@@ -49,7 +49,7 @@ jobs:
 
       - name: Install Yunzai workspace dependencies
         working-directory: yunzai
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
 
       - name: Build plugin
         working-directory: yunzai
