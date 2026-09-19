@@ -41,7 +41,7 @@ GET api-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie?game_biz=hk4e_cn
 
 ## Passport 请求
 
-`src/main2.ts` 与逍遥 CVS 研究表明 App QR 请求包含 `x-rpc-device_id`、`x-rpc-app_id`、设备信息、应用版本、客户端类型、DS、SDK 版本和 User-Agent 等 Header。
+`src/main2.ts` 与 `xiaoyao-cvs-plugin` 研究表明 App QR 请求包含 `x-rpc-device_id`、`x-rpc-app_id`、设备信息、应用版本、客户端类型、DS、SDK 版本和 User-Agent 等 Header。
 
 Header 与 DS 生成属于协议实现，应集中在认证服务中。修改 salt、App 版本、客户端类型或 Header 集合前，记录来源和验证方式。
 

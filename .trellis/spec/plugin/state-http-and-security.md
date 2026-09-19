@@ -18,13 +18,13 @@
 
 ## HTTP 统一入口
 
-`src/http.ts` 的 `httpJson` 当前负责：
+`src/http.ts` 的 `httpJson` 负责：
 
 - 接收 URL、method、Header、结构化 body 和历史 key。
 - 发送 `fetch`。
 - 读取原始响应文本并尝试 JSON 解析。
 - 解析 Set-Cookie 为对象数组，同时把原始行返回给业务层。
-- 写入成功或失败的结构化历史。
+- 当 `config/main.yaml` 的 `debug` 为 `true` 时，写入成功或失败的结构化历史。
 
 新增米哈游请求应走该统一入口或经评审后的替代实现。业务模块负责请求语义与返回类型，HTTP 层不解释具体 Token。
 

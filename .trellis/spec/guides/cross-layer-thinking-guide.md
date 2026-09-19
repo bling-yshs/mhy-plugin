@@ -54,7 +54,7 @@ QR ticket
 
 ## 可观测性与敏感数据
 
-`src/http.ts` 会把请求和响应写入 `.mys-http-history/`。这类文件可能包含 Cookie、Token、UID 和设备标识：
+`src/http.ts` 在调试模式开启时会把请求和响应写入 `.mys-http-history/`。这类文件可能包含 Cookie、Token、UID 和设备标识：
 
 - 保持在 `.gitignore` 中。
 - 用户消息和普通运行日志不得输出完整凭据。
