@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/oxfmt/configuration_schema.json",
+  "semi": false,
+  "singleQuote": true,
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "dist-ssr",
+    "coverage",
+    "src/volt/**",
+    "src/components/**",
+    "src/lib/**",
+    "src-tauri/**",
+    "package.json",
+    "package.json5",
+    "*.md",
+    ".trellis/**"
+  ],
+  "overrides": [
+    {
+      "files": ["*.json", "*.jsonc"],
+      "options": {
+        "trailingComma": "none"
+      }
+    }
+  ]
+}

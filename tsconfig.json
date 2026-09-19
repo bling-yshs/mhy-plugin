@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    // 按 Node.js ESM 的规则进行模块解析
+    "target": "es2025",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "rewriteRelativeImportExtensions": true,
+    // 仅加载 Node.js 声明的全局变量
+    "types": ["node"],
+    // 解析 json 模块
+    "resolveJsonModule": true,
+    // 严格 typescript 模式
+    "strict": true,
+    // 强制一致的文件名大小写
+    "forceConsistentCasingInFileNames": true,
+    // 跳过库类型检查
+    "skipLibCheck": true,
+    // 编译输出 Node.js ESM JavaScript 和 TypeScript 声明文件
+    "declaration": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*"]
+}

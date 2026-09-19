@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "dist-ssr",
+    "coverage",
+    "src/volt/**",
+    "src/components/**",
+    "src/lib/**",
+    "src-tauri/**",
+    "package.json",
+    "package.json5",
+    "*.md",
+    ".trellis/**"
+  ],
+  "rules": {
+    "no-console": "off",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-restricted-types": [
+      "error",
+      {
+        "types": {
+          "unknown": "不允许使用 unknown"
+        }
+      }
+    ]
+  }
+}
