@@ -2,11 +2,11 @@
   "id": "00-bootstrap-guidelines",
   "name": "00-bootstrap-guidelines",
   "title": "Bootstrap Guidelines",
-  "description": "Fill in project development guidelines for AI agents",
+  "description": "Bootstrap project-specific Trellis guidelines for the Yunzai/TRSS miHoYo plugin",
   "status": "in_progress",
   "dev_type": "docs",
   "scope": null,
-  "package": null,
+  "package": "plugin",
   "priority": "P1",
   "creator": "bling-yshs",
   "assignee": "bling-yshs",
@@ -21,8 +21,9 @@
   "children": [],
   "parent": null,
   "relatedFiles": [
-    ".trellis/spec/frontend/"
+    ".trellis/spec/plugin/",
+    ".trellis/spec/guides/"
   ],
-  "notes": "First-time setup task created by trellis init (frontend project)",
+  "notes": "Trellis init misclassified the repository as frontend; specs were reshaped around the actual Yunzai/TRSS plugin architecture and miHoYo protocol research.",
   "meta": {}
 }
