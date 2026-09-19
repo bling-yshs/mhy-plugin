@@ -12,7 +12,8 @@
     "package.json",
     "package.json5",
     "*.md",
-    ".trellis/**"
+    ".trellis/**",
+    "agent-knowledge/**"
   ],
   "rules": {
     "no-console": "off",

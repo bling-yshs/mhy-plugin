@@ -31,3 +31,4 @@ data/
 
 config/main.yaml
 migration/review/
+agent-knowledge/

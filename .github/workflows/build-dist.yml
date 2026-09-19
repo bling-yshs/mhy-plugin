@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - dev
+    paths-ignore:
+      - agent-knowledge/**
 
 permissions:
   contents: write

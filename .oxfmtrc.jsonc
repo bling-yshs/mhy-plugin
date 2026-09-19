@@ -14,7 +14,8 @@
     "package.json",
     "package.json5",
     "*.md",
-    ".trellis/**"
+    ".trellis/**",
+    "agent-knowledge/**"
   ],
   "overrides": [
     {
