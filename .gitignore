@@ -15,6 +15,7 @@ dist-ssr
 .mys-state.json
 .mys-device.json
 .mys-http-history/
+fetch-history/
 data/
 
 # Editor directories and files

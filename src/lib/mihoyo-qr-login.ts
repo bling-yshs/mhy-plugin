@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import QRCode from 'qrcode'
-import { httpJson } from '../http.js'
+import fetch from './fetch.js'
 
 const QR_APP_ID = 'bll8iq97cem8'
 const CREATE_QR_URL =
@@ -67,9 +67,13 @@ function assertApiSuccess<T>(payload: ApiResponse<T>, apiName: string) {
   }
 }
 
+/**
+ * 创建米游社登录二维码。
+ * @param {PersistedState} state 登录状态
+ * @returns {Promise<QrCreateData>} 二维码地址和票据
+ */
 async function createQrLogin(state: PersistedState) {
-  const result = await httpJson<ApiResponse<QrCreateData>>(CREATE_QR_URL, {
-    key: 'create_qr_login',
+  const response = await fetch(CREATE_QR_URL, {
     method: 'POST',
     headers: {
       Accept: 'application/json, text/plain, */*',
@@ -78,14 +82,15 @@ async function createQrLogin(state: PersistedState) {
       'x-rpc-device_id': state.device_id,
     },
   })
+  const result = (await response.json()) as ApiResponse<QrCreateData>
 
-  assertApiSuccess(result.body, '创建米游社二维码')
+  assertApiSuccess(result, '创建米游社二维码')
 
-  if (!result.body.data?.url || !result.body.data?.ticket) {
+  if (!result.data?.url || !result.data?.ticket) {
     throw new Error('创建二维码成功响应中缺少 url 或 ticket')
   }
 
-  return result.body.data
+  return result.data
 }
 
 export async function createMihoyoQrCode() {
