@@ -4,7 +4,6 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "tsx src/main.ts",
     "build": "tsc",
     "check": "pnpm run \"/^(type-check|lint:check|format:check)$/\"",
     "type-check": "tsc --noEmit",
