@@ -22,6 +22,7 @@ src/http.ts              HTTP、响应读取、Set-Cookie 解析、调试历史
 src/main.ts              Web QR 与原神数据研究样本
 src/main2.ts             App QR 与 Token 兑换研究样本
 scripts/                 本地维护脚本
+migration/               独立历史迁移工具、文档、测试及本地回退资料
 data/                    运行期生成数据，已忽略
 dist/                    TypeScript 构建产物，已忽略
 ```

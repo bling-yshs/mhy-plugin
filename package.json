@@ -5,8 +5,9 @@
   "private": true,
   "scripts": {
     "build": "tsc",
-    "test": "node --test tests/*.test.mjs",
-    "import:legacy": "node scripts/import-legacy.mjs",
+    "test": "node --test tests/*.test.mjs migration/tests/*.test.mjs",
+    "migrate:database": "node migration/upgrade-database.mjs",
+    "import:legacy": "node migration/import-legacy.mjs",
     "check": "pnpm run \"/^(type-check|lint:check|format:check)$/\"",
     "type-check": "tsc --noEmit",
     "lint:check": "oxlint",

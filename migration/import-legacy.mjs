@@ -11,7 +11,7 @@ const apply = args.includes('--apply')
 const dbIndex = args.indexOf('--database')
 if (dbIndex < 0 || !args[dbIndex + 1])
   throw new Error(
-    '用法：node scripts/import-legacy.mjs --database <SQLite路径> [--apply] [--stokens <目录>] [--device-source 账号=miao|zzz]；Redis 使用 MHY_IMPORT_REDIS_URL',
+    '用法：node migration/import-legacy.mjs --database <SQLite路径> [--apply] [--stokens <目录>] [--device-source 账号=miao|zzz]；Redis 使用 MHY_IMPORT_REDIS_URL',
   )
 const database = path.resolve(args[dbIndex + 1])
 const sourceIndex = args.indexOf('--stokens')
@@ -144,6 +144,10 @@ try {
   const rows = await db.query('SELECT * FROM MysUsers', { type: QueryTypes.SELECT })
   const users = await db.query('SELECT * FROM Users', { type: QueryTypes.SELECT })
   if (apply) {
+    const columns = await db.getQueryInterface().describeTable('MysUsers')
+    if (['stoken', 'mid', 'login_device', 'bound_device'].some((key) => !columns[key])) {
+      throw new Error('请先执行 node migration/upgrade-database.mjs --database <SQLite路径>')
+    }
     process.env.MHY_DATABASE_PATH = database
     target = await import('../dist/db/index.js')
   }

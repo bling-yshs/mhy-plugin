@@ -8,6 +8,7 @@
 | --- | --- |
 | [项目背景](./project-context.md) | 插件目标、当前阶段、参考项目与范围 |
 | [架构与目录](./architecture.md) | 加载入口、命令层、服务层、基础设施和类型边界 |
+| [历史迁移边界](./migration-boundary.md) | 手动升级、旧数据导入及主插件最新结构约定 |
 | [米哈游认证与数据协议](./mihoyo-api-and-auth.md) | App QR、Token 兑换、账号与角色数据链路 |
 | [状态、HTTP 与安全](./state-http-and-security.md) | 凭据持久化、Cookie、HTTP 历史和错误处理 |
 | [TypeScript 与质量](./typescript-and-quality.md) | ESM、类型、注释、依赖和验证命令 |

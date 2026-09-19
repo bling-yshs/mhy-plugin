@@ -9,7 +9,7 @@ import {
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
-// 测试和离线迁移可显式指定数据库，正常启动沿用云崽配置。
+// 测试可显式指定数据库，正常启动沿用云崽配置。
 const configUrl = new URL('../../../../lib/config/config.js', import.meta.url)
 const options: Options = process.env.MHY_DATABASE_PATH
   ? { dialect: 'sqlite', storage: process.env.MHY_DATABASE_PATH, logging: false }
@@ -204,27 +204,10 @@ BaseModel.initDB(UserGameDB, {
   },
 })
 
-/** 备份并补齐凭据列，重复启动保持幂等。
- * @returns 数据库就绪
- */
-export async function migrateDatabase(): Promise<void> {
-  const qi = sequelize.getQueryInterface()
-  const tables = await qi.showAllTables()
-  if (tables.includes('MysUsers')) {
-    const columns = await qi.describeTable('MysUsers')
-    const missing = ['stoken', 'mid', 'login_device', 'bound_device'].filter((key) => !columns[key])
-    if (missing.length && options.dialect === 'sqlite' && options.storage !== ':memory:') {
-      const backup = path.resolve(`${options.storage}.before-mhy-${Date.now()}.sqlite`)
-      await sequelize.query(`VACUUM INTO ${sequelize.escape(backup)}`)
-    }
-    for (const key of missing)
-      await qi.addColumn('MysUsers', key, { type: DataTypes.TEXT, allowNull: true })
-  }
-  await MysUserDB.sync()
-  await UserDB.sync()
-  await UserGameDB.sync()
-}
-await migrateDatabase()
+// 按当前模型创建缺失的表；既有表的升级由独立迁移工具执行。
+await MysUserDB.sync()
+await UserDB.sync()
+await UserGameDB.sync()
 
 let writeQueue: Promise<void> = Promise.resolve()
 /** 串行化本插件 SQLite 写事务。

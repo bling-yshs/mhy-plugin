@@ -1,29 +1,20 @@
 import test, { after, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readdir, readFile, mkdir, writeFile } from 'node:fs/promises'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
-import { fileURLToPath } from 'node:url'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
-import { Sequelize } from 'sequelize'
 
 const directory = await mkdtemp(path.join(tmpdir(), 'mhy-test-'))
 process.env.MHY_DATABASE_PATH = path.join(directory, 'accounts.sqlite')
-const old = new Sequelize({
-  dialect: 'sqlite',
-  storage: process.env.MHY_DATABASE_PATH,
-  logging: false,
-})
-await old.query(
-  'CREATE TABLE MysUsers (ltuid INTEGER PRIMARY KEY, type VARCHAR(255), ck VARCHAR(255), device VARCHAR(255), uids VARCHAR(255), createdAt DATETIME NOT NULL, updatedAt DATETIME NOT NULL)',
-)
-await old.query(
-  "INSERT INTO MysUsers VALUES (100, 'mys', 'ltuid=100;cookie_token=old', 'device-100', '{\"gs\":[\"100000001\"]}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-)
-await old.close()
 const db = await import('../dist/db/index.js')
+await db.MysUserDB.create({
+  ltuid: 100,
+  type: 'mys',
+  ck: 'ltuid=100;cookie_token=old',
+  device: 'device-100',
+  uids: { gs: ['100000001'] },
+})
 const api = await import('../dist/api.js')
 const originalFetch = globalThis.fetch
 const cache = new Map()
@@ -50,14 +41,6 @@ after(async () => {
 function response(data) {
   return new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } })
 }
-
-test('旧库增量升级保留数据，重复升级只生成一次备份', async () => {
-  const columns = await db.sequelize.getQueryInterface().describeTable('MysUsers')
-  for (const key of ['stoken', 'mid', 'login_device', 'bound_device']) assert.ok(columns[key])
-  assert.equal((await db.MysUserDB.findByPk('100')).ck, 'ltuid=100;cookie_token=old')
-  await db.migrateDatabase()
-  assert.equal((await readdir(directory)).filter((name) => name.includes('before-mhy')).length, 1)
-})
 
 test('登录事务保存三游戏角色，旧模型保存保留新凭据', async () => {
   const login = {
@@ -155,36 +138,6 @@ test('首批三游戏请求保持响应结构且 DS 使用最终参数', async (
       payload,
     )
   }
-})
-
-test('旧 getData 与新兼容边界交付相同完整响应', async () => {
-  const source = await readFile(new URL('./fixtures/legacy-mys-api.txt', import.meta.url), 'utf8')
-  const isolated = source.replace(/^import .*$/gm, '')
-  const prelude = `const md5 = value => String(value); const fetch = (...args) => globalThis.fetch(...args); const cfg = { bot: {} }; class ApiTool {}\n`
-  const Original = (
-    await import(
-      `data:text/javascript;base64,${Buffer.from(prelude + isolated).toString('base64')}`
-    )
-  ).default
-  const oldApi = new Original('100000002', 'ltuid=101;cookie_token=new')
-  oldApi._device_fp = { data: { device_fp: 'fp101' } }
-  oldApi.getUrl = () => ({ url: 'https://test.invalid/character', headers: {}, body: '' })
-  const payload = {
-    retcode: 0,
-    message: 'OK',
-    data: {
-      list: [
-        { base: { id: 10000021 }, relics: [], weapon: { id: 11501 }, selected_properties: [] },
-      ],
-      property_map: {},
-      relic_property_options: {},
-      added: null,
-    },
-  }
-  globalThis.fetch = async () => response(payload)
-  const before = await oldApi.getData('characterDetail', { character_ids: [10000021] })
-  const after = await api.legacyGetData(oldApi, 'characterDetail', { character_ids: [10000021] })
-  assert.deepEqual(after, before)
 })
 
 test('指纹并发刷新合并，解绑后旧刷新结果无法覆盖', async () => {
@@ -368,34 +321,4 @@ test('国际服路由与业务验证码原样保留', async () => {
     await api.execute('zzzNote', { game: 'zzz', uid: '1300000001', cookie: 'ltuid=101;x=1' }),
     payload,
   )
-})
-
-test('独立导入预览只读，重复导入与冲突保护源数据', async () => {
-  const sourceDir = path.join(directory, 'legacy')
-  await mkdir(sourceDir)
-  const sourceFile = path.join(sourceDir, '123456.yaml')
-  const yaml = '100:\n  stuid: 100\n  mid: legacy-mid\n  stoken: v2_legacy\n'
-  await writeFile(sourceFile, yaml)
-  const run = promisify(execFile)
-  const script = fileURLToPath(new URL('../scripts/import-legacy.mjs', import.meta.url))
-  const args = [script, '--database', process.env.MHY_DATABASE_PATH, '--stokens', sourceDir]
-  const before = await readFile(process.env.MHY_DATABASE_PATH)
-  const preview = JSON.parse((await run(process.execPath, args)).stdout)
-  assert.equal(preview.records[0].status, 'would-import')
-  assert.deepEqual(await readFile(process.env.MHY_DATABASE_PATH), before)
-  assert.equal(
-    JSON.parse((await run(process.execPath, [...args, '--apply'])).stdout).records[0].status,
-    'imported',
-  )
-  assert.equal(
-    JSON.parse((await run(process.execPath, [...args, '--apply'])).stdout).records[0].status,
-    'unchanged',
-  )
-  await db.MysUserDB.update({ stoken: 'v2_newer' }, { where: { ltuid: 100 } })
-  assert.equal(
-    JSON.parse((await run(process.execPath, [...args, '--apply'])).stdout).records[0].status,
-    'conflict',
-  )
-  assert.equal(await readFile(sourceFile, 'utf8'), yaml)
-  assert.equal((await db.MysUserDB.findByPk('100')).stoken, 'v2_newer')
 })

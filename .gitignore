@@ -30,4 +30,4 @@ data/
 *.sw?
 
 config/main.yaml
-integration-review/
+migration/review/
