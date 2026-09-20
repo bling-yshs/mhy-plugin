@@ -69,6 +69,35 @@ export interface Operations {
         params: Record<string, never>;
         data: Record<string, JsonValue>;
     };
+    spiralAbyss: {
+        params: {
+            schedule_type?: number;
+            need_detail?: boolean;
+            need_all?: boolean;
+        };
+        data: Record<string, JsonValue>;
+    };
+    role_combat: {
+        params: {
+            active?: number;
+            schedule_type?: number;
+            need_detail?: boolean;
+            need_all?: boolean;
+        };
+        data: Record<string, JsonValue>;
+    };
+    hard_challenge: {
+        params: {
+            schedule_type?: number;
+            need_detail?: boolean;
+            need_all?: boolean;
+        };
+        data: Record<string, JsonValue>;
+    };
+    hard_challenge_popularity: {
+        params: Record<string, never>;
+        data: Record<string, JsonValue>;
+    };
     zzzAvatarInfo: {
         params: {
             id_list?: number[];

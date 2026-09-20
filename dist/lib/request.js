@@ -17,6 +17,10 @@ const core = new Set([
     'characterDetail',
     'avatarInfo',
     'basicInfo',
+    'spiralAbyss',
+    'role_combat',
+    'hard_challenge',
+    'hard_challenge_popularity',
     'zzzAvatarInfo',
     'zzzExplorationDetail',
     'buddy',
@@ -139,6 +143,10 @@ export async function execute(operation, context, params = {}) {
         characterDetail: 'character/detail',
         avatarInfo: 'avatar/info',
         basicInfo: game === 'gs' ? 'gcg/basicInfo' : 'role/basicInfo',
+        spiralAbyss: game === 'gs' ? 'spiralAbyss' : 'challenge',
+        role_combat: 'role_combat',
+        hard_challenge: 'hard_challenge',
+        hard_challenge_popularity: 'hard_challenge/popularity',
         zzzAvatarInfo: 'avatar/info',
         zzzExplorationDetail: 'exploration_detail',
         buddy: 'buddy/info',
@@ -159,6 +167,18 @@ export async function execute(operation, context, params = {}) {
     }
     if (op === 'zzzAvatarInfo')
         query.set('need_wiki', String(params.need_wiki ?? false));
+    if (op === 'spiralAbyss' || op === 'role_combat' || op === 'hard_challenge') {
+        if (op === 'spiralAbyss')
+            query.set('schedule_type', String(params.schedule_type || 1));
+        if (op === 'role_combat' || op === 'hard_challenge')
+            query.set('need_detail', String(params.need_detail ?? true));
+        for (const key of ['schedule_type', 'need_detail', 'need_all']) {
+            if (params[key] !== undefined)
+                query.set(key, String(params[key]));
+        }
+        if (op === 'role_combat' && params.active !== undefined)
+            query.set('active', String(params.active));
+    }
     if (params.avatar_list_type !== undefined)
         query.set('avatar_list_type', String(params.avatar_list_type));
     if (params.id_list)
