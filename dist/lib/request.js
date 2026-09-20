@@ -138,7 +138,7 @@ export async function execute(operation, context, params = {}) {
         character: game === 'gs' ? 'character/list' : 'avatar/basic',
         characterDetail: 'character/detail',
         avatarInfo: 'avatar/info',
-        basicInfo: 'role/basicInfo',
+        basicInfo: game === 'gs' ? 'gcg/basicInfo' : 'role/basicInfo',
         zzzAvatarInfo: 'avatar/info',
         zzzExplorationDetail: 'exploration_detail',
         buddy: 'buddy/info',
