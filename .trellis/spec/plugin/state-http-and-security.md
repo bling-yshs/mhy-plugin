@@ -18,6 +18,17 @@
 
 ## HTTP 统一入口
 
+### 配置热更新
+
+- `src/lib/config.ts` 默认导出固定的 `MhyPluginConfig` 对象，调用方通过 `config.debug` 读取当前值。
+- 启动时确保 `config/main.yaml` 存在，读取优先级为内置 `debug: false`、`default-config/main.yaml`、`config/main.yaml`。
+- 两个 YAML 文件均通过 `watchFile` 每 1000 毫秒检查变化，监听器使用 `persistent: false`，允许进程正常退出。
+- 文件必须解析为对象，存在的 `debug` 字段必须为布尔值；空文件、数组、非法 YAML、类型错误和读取失败均视为无效配置。空对象允许回退到默认值。
+- 首次加载无效配置会抛出异常；运行中重新加载失败会记录警告并保留完整的上一次有效配置，下一次文件变化时重试。
+- 重新加载全部校验成功后通过 `Object.assign` 原地更新对象。文件删除后恢复、替换文件保存继续触发监听。
+- 调用处直接读取 `config.debug`；模块顶部解构得到的布尔值会停留在初始化状态。fetch 在请求开始时读取开关，进行中的请求沿用当时的状态。
+- 离线回归：先执行 `pnpm build`，再执行 `node --test tests/config.test.mjs`，覆盖开关切换、用户覆盖默认值、错误保留旧值、文件恢复和进程退出。
+
 `src/http.ts` 的 `httpJson` 负责：
 
 - 接收 URL、method、Header、结构化 body 和历史 key。
