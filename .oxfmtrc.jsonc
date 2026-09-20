@@ -10,6 +10,7 @@
     "src/volt/**",
     "src/components/**",
     "src/lib/**",
+    "src/types/yunzai.d.ts",
     "src-tauri/**",
     "package.json",
     "package.json5",
