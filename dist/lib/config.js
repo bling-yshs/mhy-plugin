@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, watchFile } from 'node:fs';
 import YAML from 'yaml';
 const DEFAULT_CONFIG_FILE = new URL('../../default-config/main.yaml', import.meta.url);
 const CONFIG_DIRECTORY = new URL('../../config/', import.meta.url);
@@ -20,17 +20,40 @@ function ensureConfigFile() {
  */
 function readConfigFile(file) {
     const parsed = YAML.parse(readFileSync(file, 'utf8'));
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-        return {};
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error(`配置文件必须是 YAML 对象：${file.pathname}`);
+    }
+    if ('debug' in parsed && typeof parsed.debug !== 'boolean') {
+        throw new Error(`配置 debug 必须是布尔值：${file.pathname}`);
+    }
     return parsed;
 }
+/**
+ * 读取并校验默认配置和用户配置，用户配置优先。
+ * @returns {MhyPluginConfig} 完整的有效配置
+ */
+function loadConfig() {
+    return {
+        debug: false,
+        ...readConfigFile(DEFAULT_CONFIG_FILE),
+        ...readConfigFile(CONFIG_FILE),
+    };
+}
 ensureConfigFile();
-const mergedConfig = {
-    debug: false,
-    ...readConfigFile(DEFAULT_CONFIG_FILE),
-    ...readConfigFile(CONFIG_FILE),
-};
-const config = {
-    debug: typeof mergedConfig.debug === 'boolean' ? mergedConfig.debug : false,
-};
+const config = loadConfig();
+/**
+ * 重新加载配置并原地更新导出对象，读取或校验失败时保留旧配置。
+ * @returns {void}
+ */
+function reloadConfig() {
+    try {
+        Object.assign(config, loadConfig());
+    }
+    catch (error) {
+        console.warn('[mhy-plugin] 配置热更新失败，保留上一次有效配置', error);
+    }
+}
+for (const file of [DEFAULT_CONFIG_FILE, CONFIG_FILE]) {
+    watchFile(file, { interval: 1000, persistent: false }, reloadConfig);
+}
 export default config;
