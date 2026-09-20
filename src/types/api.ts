@@ -46,6 +46,12 @@ export interface Operations {
   characterDetail: { params: { character_ids: number[] }; data: GenshinCharacterDetailData }
   avatarInfo: { params: { need_wiki?: boolean }; data: Record<string, JsonValue> }
   basicInfo: { params: Record<string, never>; data: Record<string, JsonValue> }
+  ys_ledger: { params: { month: number | string }; data: Record<string, JsonValue> }
+  detail: {
+    params: { avatar_id: number | string; tab_from?: string }
+    data: Record<string, JsonValue>
+  }
+  avatarSkill: { params: { avatar_id: number | string }; data: Record<string, JsonValue> }
   spiralAbyss: {
     params: { schedule_type?: number; need_detail?: boolean; need_all?: boolean }
     data: Record<string, JsonValue>

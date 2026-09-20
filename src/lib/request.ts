@@ -19,6 +19,9 @@ const core = new Set([
   'characterDetail',
   'avatarInfo',
   'basicInfo',
+  'ys_ledger',
+  'detail',
+  'avatarSkill',
   'spiralAbyss',
   'role_combat',
   'hard_challenge',
@@ -203,6 +206,50 @@ export async function execute(
   if (params.avatar_list_type !== undefined)
     query.set('avatar_list_type', String(params.avatar_list_type))
   if (params.id_list) for (const id of params.id_list) query.append('id_list[]', String(id))
+  let url = `${host}${prefix}/${paths[op]}`
+  if (op === 'ys_ledger' || op === 'detail' || op === 'avatarSkill') {
+    if (game === 'zzz' || (op === 'avatarSkill' && game !== 'gs'))
+      throw new Error(`游戏 ${game} 不支持接口：${operation}`)
+    for (const key of [...query.keys()]) query.delete(key)
+    const eventHost = cn ? 'https://api-takumi.mihoyo.com' : 'https://sg-public-api.hoyolab.com'
+    if (op === 'ys_ledger') {
+      if (params.month === undefined) throw new Error('缺少 month')
+      query.set('month', String(params.month))
+      if (game === 'gs' && cn) {
+        url = 'https://hk4e-api.mihoyo.com/event/ys_ledger/monthInfo'
+        query.set('bind_uid', uid)
+        query.set('bind_region', server)
+      } else {
+        url =
+          game === 'gs'
+            ? 'https://sg-hk4e-api.hoyolab.com/event/ysledgeros/month_info'
+            : `${eventHost}/event/srledger/month_info`
+        query.set('lang', 'zh-cn')
+        query.set('role_id', uid)
+        query.set('server', server)
+      }
+    } else {
+      if (params.avatar_id === undefined) throw new Error('缺少 avatar_id')
+      if (game === 'sr') {
+        url = `${eventHost}/event/rpgcalc/avatar/detail`
+        query.set('game', 'hkrpg')
+        query.set('lang', 'zh-cn')
+        query.set('item_id', String(params.avatar_id))
+        query.set('tab_from', String(params.tab_from ?? 'TabOwned'))
+        query.set('change_target_level', '0')
+      } else {
+        const calculator = cn ? 'e20200928calculate/v1' : 'calculateos'
+        const path = op === 'detail' ? 'sync/avatar/detail' : cn ? 'avatarSkill/list' : 'avatar/skill_list'
+        url = `${eventHost}/event/${calculator}/${path}`
+        if (!cn) query.set('lang', 'zh-cn')
+        query.set('avatar_id', String(params.avatar_id))
+      }
+      if (op === 'detail') {
+        query.set('uid', uid)
+        query.set('region', server)
+      }
+    }
+  }
   if (params.query) {
     const entries =
       typeof params.query === 'string'
@@ -228,7 +275,6 @@ export async function execute(
     })
     for (const key of [...query.keys()]) query.delete(key)
   }
-  let url = `${host}${prefix}/${paths[op]}`
   if (op === 'zzzUser') {
     prefix = cn ? 'https://api-takumi.mihoyo.com' : 'https://sg-public-api.hoyolab.com'
     url = `${prefix}/binding/api/getUserGameRolesByCookie`
