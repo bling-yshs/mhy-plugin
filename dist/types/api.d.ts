@@ -69,6 +69,25 @@ export interface Operations {
         params: Record<string, never>;
         data: Record<string, JsonValue>;
     };
+    ys_ledger: {
+        params: {
+            month: number | string;
+        };
+        data: Record<string, JsonValue>;
+    };
+    detail: {
+        params: {
+            avatar_id: number | string;
+            tab_from?: string;
+        };
+        data: Record<string, JsonValue>;
+    };
+    avatarSkill: {
+        params: {
+            avatar_id: number | string;
+        };
+        data: Record<string, JsonValue>;
+    };
     spiralAbyss: {
         params: {
             schedule_type?: number;
