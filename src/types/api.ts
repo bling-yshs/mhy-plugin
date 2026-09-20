@@ -46,6 +46,19 @@ export interface Operations {
   characterDetail: { params: { character_ids: number[] }; data: GenshinCharacterDetailData }
   avatarInfo: { params: { need_wiki?: boolean }; data: Record<string, JsonValue> }
   basicInfo: { params: Record<string, never>; data: Record<string, JsonValue> }
+  spiralAbyss: {
+    params: { schedule_type?: number; need_detail?: boolean; need_all?: boolean }
+    data: Record<string, JsonValue>
+  }
+  role_combat: {
+    params: { active?: number; schedule_type?: number; need_detail?: boolean; need_all?: boolean }
+    data: Record<string, JsonValue>
+  }
+  hard_challenge: {
+    params: { schedule_type?: number; need_detail?: boolean; need_all?: boolean }
+    data: Record<string, JsonValue>
+  }
+  hard_challenge_popularity: { params: Record<string, never>; data: Record<string, JsonValue> }
   zzzAvatarInfo: {
     params: { id_list?: number[]; need_wiki?: boolean }
     data: Record<string, JsonValue>
