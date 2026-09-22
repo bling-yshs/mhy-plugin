@@ -31,7 +31,7 @@ export declare function signUser(userId: string, game: Game): Promise<string[]>;
  * @returns 执行完成
  */
 export declare function runAutoSign(): Promise<void>;
-/** 查询发送者关联账号的开关及今日执行状态。
+/** 查询发送者关联账号的三游戏自动签到开关。
  * @param userId 发送者 ID
  * @returns 状态文本
  */

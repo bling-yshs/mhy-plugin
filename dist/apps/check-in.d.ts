@@ -15,7 +15,7 @@ export declare class MhyCheckIn extends plugin {
      * @returns 是否已处理
      */
     sign(): Promise<boolean>;
-    /** 展示本人账号的自动签到开关及今日结果。
+    /** 按账号展示本人三游戏的自动签到开关。
      * @returns 是否已处理
      */
     status(): Promise<boolean>;
