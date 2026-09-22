@@ -2,6 +2,7 @@ import { AutoSignSettingDB, MysUserDB, SignRecordDB, UserDB, writeTransaction } 
 import { getAccounts } from './accounts.js'
 import { getServer, request } from './request.js'
 import type { ApiResponse, Game, JsonValue } from '../types/api.js'
+import { Op } from 'sequelize'
 
 const running = new Set<string>()
 const gameNames = { gs: '原神', sr: '星铁', zzz: '绝区零' }
@@ -137,7 +138,37 @@ export async function signUser(userId: string, game: Game): Promise<string[]> {
   return messages.length ? messages : [`请先绑定${gameNames[game]}的米游社账号`]
 }
 
-/** 执行已开启账号的每日自动签到，逐角色隔离错误且不重试。
+/** 连续三个自然日的记录全部失败时关闭账号对应游戏的自动签到。
+ * @param setting 自动签到设置
+ * @returns 是否已关闭
+ */
+async function stopFailedAutoSign(setting: AutoSignSettingDB): Promise<boolean> {
+  return writeTransaction(async transaction => {
+    await setting.reload({ transaction })
+    if (!setting.enabled) return true
+    const records = await SignRecordDB.findAll({
+      attributes: ['sign_date', 'status'],
+      where: {
+        ltuid: setting.ltuid,
+        game: setting.game,
+        updated_at: { [Op.gte]: setting.getDataValue('updated_at') },
+      },
+      order: [['sign_date', 'DESC']],
+      transaction,
+    })
+    const dates = [...new Set(records.map(record => record.sign_date))].slice(0, 3)
+    if (dates.length < 3) return false
+    for (let index = 0; index < dates.length; index++) {
+      if (Date.parse(dates[0]!) - Date.parse(dates[index]!) !== index * 86400000) return false
+      if (records.some(record => record.sign_date === dates[index] && record.status !== 'failed')) return false
+    }
+    await setting.update({ enabled: false }, { transaction })
+    logger.mark(`[mhy-plugin] 米游社账号 ${setting.ltuid} ${gameNames[setting.game]}连续三天签到失败，已关闭自动签到`)
+    return true
+  })
+}
+
+/** 执行每日自动签到，连续三天失败关闭开关，逐角色隔离错误且不重试。
  * @returns 执行完成
  */
 export async function runAutoSign(): Promise<void> {
@@ -145,6 +176,7 @@ export async function runAutoSign(): Promise<void> {
   for (const setting of await AutoSignSettingDB.findAll({ where: { enabled: true } })) {
     if (!linked.has(String(setting.ltuid))) continue
     if (!['gs', 'sr', 'zzz'].includes(setting.game)) continue
+    if (await stopFailedAutoSign(setting)) continue
     const account = await MysUserDB.findByPk(setting.ltuid)
     for (const uid of account?.uids[setting.game] || []) {
       try {
@@ -156,6 +188,7 @@ export async function runAutoSign(): Promise<void> {
         logger.error(`[mhy-plugin] 自动签到 ${setting.game}/${uid} 执行失败`, error)
       }
     }
+    await stopFailedAutoSign(setting)
   }
 }
 
