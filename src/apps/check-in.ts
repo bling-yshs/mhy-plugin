@@ -65,12 +65,12 @@ export class MhyCheckIn extends plugin {
       )
     } catch (error) {
       logger.error('[mhy-plugin] 手动签到执行失败', error)
-      await this.reply('签到执行失败，请查看机器人日志')
+      await this.reply(`签到执行失败：${error instanceof Error ? error.message : String(error)}`)
     }
     return true
   }
 
-  /** 展示本人账号的自动签到开关及今日结果。
+  /** 按账号展示本人三游戏的自动签到开关。
    * @returns 是否已处理
    */
   async status(): Promise<boolean> {

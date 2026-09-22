@@ -99,17 +99,15 @@ export async function signRole(ltuid: string, game: Game, uid: string, manual: b
         const award = Array.isArray(awards) ? awards[days - 1] : undefined
         if (home.retcode === 0 && award && typeof award === 'object' && !Array.isArray(award))
           message += `，奖励：${award.name} × ${award.cnt}`
-        else message += '（奖励信息获取失败）'
+        else message += `（奖励信息获取失败：${home.message}）`
       } catch (error) {
         result.reward_error = error instanceof Error ? error.message : String(error)
-        message += '（奖励信息获取失败）'
+        message += `（奖励信息获取失败：${result.reward_error}）`
       }
     } catch (error) {
       record.status = 'failed'
       result.error = error instanceof Error ? error.message : String(error)
-      message = '签到失败，请查看 #自动签到状态；详细返回已保存在数据库'
-      if (result.sign && typeof result.sign === 'object' && 'data' in result.sign)
-        message += '，如需验证请先在米游社处理'
+      message = `签到失败：${result.error}`
     }
     record.result = JSON.stringify(result)
     await writeTransaction(async transaction => { await record.save({ transaction }) })
@@ -159,24 +157,20 @@ export async function runAutoSign(): Promise<void> {
   }
 }
 
-/** 查询发送者关联账号的开关及今日执行状态。
+/** 查询发送者关联账号的三游戏自动签到开关。
  * @param userId 发送者 ID
  * @returns 状态文本
  */
 export async function getSignStatus(userId: string): Promise<string> {
   const lines: string[] = []
-  const names = { running: '执行中或已中断', success: '成功', already_signed: '已签到', failed: '失败（等待手动触发）' }
   for (const account of await getAccounts(userId)) {
+    const settings = await AutoSignSettingDB.findAll({ where: { ltuid: String(account.ltuid) } })
+    const switches: string[] = []
     for (const game of ['gs', 'sr', 'zzz'] as const) {
-      const uids = account.uids[game] || []
-      if (!uids.length) continue
-      const setting = await AutoSignSettingDB.findOne({ where: { ltuid: String(account.ltuid), game } })
-      lines.push(`账号 ${account.ltuid} ${gameNames[game]}自动签到：${setting?.enabled ? '开启' : '关闭'}`)
-      for (const uid of uids) {
-        const record = await SignRecordDB.findOne({ where: { game, uid, region: getServer(uid, game), sign_date: signClock().date } })
-        lines.push(`${uid}：${record ? names[record.status] : '今日未执行'}`)
-      }
+      const setting = settings.find(item => item.game === game)
+      switches.push(`${gameNames[game]}: ${setting?.enabled ? '开' : '关'}`)
     }
+    lines.push(`米游社账号 ${account.ltuid} 自动签到状态\n${switches.join(' | ')}`)
   }
-  return lines.join('\n') || '请先扫码绑定米游社账号'
+  return lines.join('\n\n') || '请先扫码绑定米游社账号'
 }
