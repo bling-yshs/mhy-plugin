@@ -70,6 +70,20 @@ export declare class UserDB extends BaseModel {
 }
 export declare class UserGameDB extends BaseModel {
 }
+export declare class AutoSignSettingDB extends Model {
+    ltuid: string;
+    game: 'gs' | 'sr' | 'zzz';
+    enabled: boolean;
+}
+export declare class SignRecordDB extends Model {
+    ltuid: string;
+    game: 'gs' | 'sr' | 'zzz';
+    region: string;
+    uid: string;
+    sign_date: string;
+    status: 'running' | 'success' | 'already_signed' | 'failed';
+    result: string | null;
+}
 /** 串行化本插件 SQLite 写事务。
  * @param work 事务内操作
  * @returns 事务结果

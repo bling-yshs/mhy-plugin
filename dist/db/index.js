@@ -95,6 +95,24 @@ export class UserDB extends BaseModel {
 }
 export class UserGameDB extends BaseModel {
 }
+export class AutoSignSettingDB extends Model {
+}
+export class SignRecordDB extends Model {
+}
+AutoSignSettingDB.init({
+    ltuid: { type: DataTypes.TEXT, primaryKey: true },
+    game: { type: DataTypes.TEXT, primaryKey: true },
+    enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+}, { sequelize, tableName: 'AutoSignSettings', createdAt: 'created_at', updatedAt: 'updated_at' });
+SignRecordDB.init({
+    game: { type: DataTypes.TEXT, primaryKey: true },
+    region: { type: DataTypes.TEXT, primaryKey: true },
+    uid: { type: DataTypes.TEXT, primaryKey: true },
+    sign_date: { type: DataTypes.TEXT, primaryKey: true },
+    ltuid: { type: DataTypes.TEXT, allowNull: false },
+    status: { type: DataTypes.TEXT, allowNull: false },
+    result: DataTypes.TEXT,
+}, { sequelize, tableName: 'SignRecords', createdAt: 'created_at', updatedAt: 'updated_at' });
 BaseModel.initDB(MysUserDB, {
     ltuid: { type: DataTypes.INTEGER, primaryKey: true },
     type: { type: DataTypes.STRING, defaultValue: 'mys' },
@@ -173,6 +191,8 @@ BaseModel.initDB(UserGameDB, {
 await MysUserDB.sync();
 await UserDB.sync();
 await UserGameDB.sync();
+await AutoSignSettingDB.sync();
+await SignRecordDB.sync();
 let writeQueue = Promise.resolve();
 /** 串行化本插件 SQLite 写事务。
  * @param work 事务内操作

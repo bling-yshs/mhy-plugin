@@ -39,6 +39,18 @@ export type RequestContext = {
     profile?: 'genshin' | 'zzz';
 };
 export interface Operations {
+    bbs_sign_info: {
+        params: Record<string, never>;
+        data: Record<string, JsonValue>;
+    };
+    bbs_sign_home: {
+        params: Record<string, never>;
+        data: Record<string, JsonValue>;
+    };
+    bbs_sign: {
+        params: Record<string, never>;
+        data: Record<string, JsonValue>;
+    };
     index: {
         params: {
             avatar_list_type?: number;

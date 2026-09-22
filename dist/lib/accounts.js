@@ -1,4 +1,4 @@
-import { MysUserDB, UserDB, writeTransaction } from '../db/index.js';
+import { AutoSignSettingDB, MysUserDB, UserDB, writeTransaction } from '../db/index.js';
 import { notifyAccountChange } from './account-events.js';
 /** 从 Cookie 提取账号 ID。
  * @param cookie Cookie 字符串
@@ -112,8 +112,10 @@ export async function unlinkAccount(userId, accountId) {
             .join(',');
         await user.save({ transaction });
         const others = (await UserDB.findAll({ transaction })).some((item) => (item.ltuids || '').split(',').includes(String(accountId)));
-        if (!others)
+        if (!others) {
+            await AutoSignSettingDB.destroy({ where: { ltuid: accountId }, transaction });
             await MysUserDB.destroy({ where: { ltuid: accountId }, transaction });
+        }
         return !others;
     });
     await notifyAccountChange({ accountId, userIds: [String(userId)], deleted });

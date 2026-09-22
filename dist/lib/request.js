@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import fetch from './fetch.js';
-import { createDs } from './sign.js';
+import { createDs, createSignDs } from './sign.js';
 import { accountIdFromCookie, resolveAccount } from './accounts.js';
 import { MysUserDB } from '../db/index.js';
 import { ensureDevice, refreshDevice, registerDeviceSession } from './devices.js';
@@ -11,6 +11,9 @@ const aliases = {
     zzzBuddyList: 'buddy',
 };
 const core = new Set([
+    'bbs_sign_info',
+    'bbs_sign_home',
+    'bbs_sign',
     'index',
     'dailyNote',
     'character',
@@ -83,6 +86,9 @@ export async function execute(operation, context, params = {}) {
     const uid = String(context.uid);
     const server = context.server || getServer(uid, game);
     const cn = /cn_|_cn/.test(server);
+    const isSign = ['bbs_sign_info', 'bbs_sign_home', 'bbs_sign'].includes(op);
+    if (isSign && !cn)
+        throw new Error('当前签到仅支持国服');
     const suppliedId = accountIdFromCookie(context.cookie);
     if (context.accountId && suppliedId && String(context.accountId) !== suppliedId)
         throw new Error('请求账号与 Cookie 归属不一致');
@@ -276,6 +282,19 @@ export async function execute(operation, context, params = {}) {
         query.set('region', server);
         query.set('game_uid', uid);
     }
+    if (isSign) {
+        const actId = { gs: 'e202311201442471', sr: 'e202304121516551', zzz: 'e202406242138391' }[game];
+        const action = op === 'bbs_sign' ? 'sign' : op === 'bbs_sign_info' ? 'info' : 'home';
+        url = `https://api-takumi.mihoyo.com/event/luna/${action}`;
+        for (const key of [...query.keys()])
+            query.delete(key);
+        const fields = { act_id: actId, region: server, uid, lang: 'zh-cn' };
+        if (op === 'bbs_sign')
+            body = JSON.stringify(fields);
+        else
+            for (const [key, value] of Object.entries(fields))
+                query.set(key, value);
+    }
     const q = query.toString();
     const version = zzzProfile ? (cn ? '2.73.1' : '2.57.1') : cn ? '2.40.1' : '2.55.0';
     const headers = new Headers(params.headers);
@@ -303,6 +322,14 @@ export async function execute(operation, context, params = {}) {
         }
     }
     headers.set('DS', createDs(q, body, cn ? undefined : 'okr4obncj8bw5a65hbnn5oo6ixjc3l9w'));
+    if (isSign) {
+        headers.set('DS', createSignDs());
+        headers.set('Origin', 'https://act.mihoyo.com');
+        headers.set('Referer', 'https://act.mihoyo.com');
+        headers.set('X-Requested-With', 'com.mihoyo.hyperion');
+        if (game !== 'sr')
+            headers.set('x-rpc-signgame', game === 'gs' ? 'hk4e' : 'zzz');
+    }
     if (body)
         headers.set('Content-Type', 'application/json');
     const signal = context.signal
@@ -314,6 +341,17 @@ export async function execute(operation, context, params = {}) {
         body: body || undefined,
         signal,
     });
+    if (isSign) {
+        const raw = await response.text();
+        if (!response.ok)
+            throw new Error(`HTTP ${response.status}: ${raw}`);
+        try {
+            return JSON.parse(raw);
+        }
+        catch {
+            throw new Error(`签到响应非 JSON：${raw}`);
+        }
+    }
     if (!response.ok)
         throw new Error(`米游社请求失败：HTTP ${response.status}`);
     return (await response.json());
@@ -327,13 +365,14 @@ export async function execute(operation, context, params = {}) {
  */
 export async function legacyGetData(api, type, data = {}, cached = false) {
     const game = type.startsWith('zzz') ? 'zzz' : api.game || 'gs';
+    const isSign = ['bbs_sign_info', 'bbs_sign_home', 'bbs_sign'].includes(type);
     const account = await MysUserDB.findByPk(accountIdFromCookie(api.cookie) || '0');
     const hash = createHash('sha256')
         .update(JSON.stringify([game, api.uid, type, data, account?.ck || api.cookie, account?.bound_device]))
         .digest('hex');
     const cacheKey = `mhy:query:${hash}`;
     try {
-        const hit = globalThis.redis && (await redis.get(cacheKey));
+        const hit = !isSign && globalThis.redis && (await redis.get(cacheKey));
         if (hit)
             return JSON.parse(hit);
         const result = await execute(type, {
@@ -345,7 +384,7 @@ export async function legacyGetData(api, type, data = {}, cached = false) {
             profile: type.startsWith('zzz') ? 'zzz' : 'genshin',
         }, data);
         result.api = type;
-        if (cached && result.retcode === 0 && globalThis.redis)
+        if (!isSign && cached && result.retcode === 0 && globalThis.redis)
             await redis.setEx(cacheKey, api.cacheCd || 300, JSON.stringify(result));
         return result;
     }
