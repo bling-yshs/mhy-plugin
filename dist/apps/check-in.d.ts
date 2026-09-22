@@ -7,7 +7,7 @@ export declare class MhyCheckIn extends plugin {
      * @returns 执行完成
      */
     daily(): Promise<void>;
-    /** 切换发送者关联账号的游戏自动签到设置。
+    /** 切换发送者关联账号的游戏自动签到设置，开启成功时提示缺少绑定设备。
      * @returns 是否已处理
      */
     toggle(): Promise<boolean>;

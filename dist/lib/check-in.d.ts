@@ -13,7 +13,7 @@ export declare function signClock(): {
  * @returns 更新的米游社账号 ID
  */
 export declare function setAutoSign(userId: string, game: Game, enabled: boolean): Promise<string[]>;
-/** 为一个角色执行签到；自动任务遇到当天任意记录即跳过。
+/** 为一个角色执行签到，手动成功时提示缺少绑定设备；自动任务遇到当天任意记录即跳过。
  * @param ltuid 米游社账号 ID
  * @param game 游戏
  * @param uid 游戏角色 UID
