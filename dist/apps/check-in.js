@@ -8,7 +8,7 @@ export class MhyCheckIn extends plugin {
             name: '[mhy-plugin]签到',
             dsc: '三游戏手动与自动签到',
             event: 'message',
-            priority: 100,
+            priority: -387420490,
             rule: [
                 { reg: '^#(原神|星铁|绝区零)?签到$', fnc: 'sign' },
                 { reg: '^#(开启|关闭)(原神|星铁|绝区零)自动签到$', fnc: 'toggle' },
