@@ -27,7 +27,7 @@ export declare function signRole(ltuid: string, game: Game, uid: string, manual:
  * @returns 每个角色的签到结果
  */
 export declare function signUser(userId: string, game: Game): Promise<string[]>;
-/** 执行已开启账号的每日自动签到，逐角色隔离错误且不重试。
+/** 执行每日自动签到，连续三天失败关闭开关，逐角色隔离错误且不重试。
  * @returns 执行完成
  */
 export declare function runAutoSign(): Promise<void>;
