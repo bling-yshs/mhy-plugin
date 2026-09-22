@@ -31,7 +31,7 @@ export async function setAutoSign(userId: string, game: Game, enabled: boolean):
   return accounts.map(account => String(account.ltuid))
 }
 
-/** 为一个角色执行签到；自动任务遇到当天任意记录即跳过。
+/** 为一个角色执行签到，手动成功时提示缺少绑定设备；自动任务遇到当天任意记录即跳过。
  * @param ltuid 米游社账号 ID
  * @param game 游戏
  * @param uid 游戏角色 UID
@@ -104,6 +104,8 @@ export async function signRole(ltuid: string, game: Game, uid: string, manual: b
         result.reward_error = error instanceof Error ? error.message : String(error)
         message += `（奖励信息获取失败：${result.reward_error}）`
       }
+      if (manual && !account.bound_device)
+        message += `\n米游社账号 ${ltuid} 尚未绑定设备，签到可能不稳定，建议发送 #绑定设备帮助 完成绑定。`
     } catch (error) {
       record.status = 'failed'
       result.error = error instanceof Error ? error.message : String(error)
