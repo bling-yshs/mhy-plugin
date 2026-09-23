@@ -19,10 +19,10 @@ jobs:
     name: Build dist from dev
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout dev
+      - name: Checkout triggering dev commit
         uses: actions/checkout@v7.0.1
         with:
-          ref: dev
+          ref: ${{ github.sha }}
           fetch-depth: 1
 
       - name: Checkout Yunzai
@@ -62,7 +62,7 @@ jobs:
           retention-days: 1
 
   publish:
-    name: Commit dist to main
+    name: Sync dev and dist to main
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -75,6 +75,11 @@ jobs:
       - name: Refresh main
         run: git pull --ff-only origin main
 
+      - name: Merge built dev commit
+        run: |
+          git fetch origin "$GITHUB_SHA"
+          git merge --no-ff --no-commit "$GITHUB_SHA"
+
       - name: Clear existing dist
         run: rm -rf dist
 
@@ -84,7 +89,7 @@ jobs:
           name: dist
           path: dist
 
-      - name: Commit dist
+      - name: Commit source and dist
         env:
           DEV_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
