@@ -1,4 +1,9 @@
-import type { ApiResponse, Game, Operations, RequestContext } from '../types/api.js';
+import type { ApiResponse, Game, JsonValue, Operations, RequestContext } from '../types/api.js';
+export type RequestProbeOptions = {
+    method?: 'GET' | 'POST';
+    body?: JsonValue;
+    history?: boolean;
+};
 /** 判断旧操作是否属于当前迁移范围。
  * @param operation 原有操作名
  * @returns 是否接管
@@ -21,9 +26,10 @@ export declare function request<K extends keyof Operations>(operation: K, contex
  * @param operation 原插件接口名
  * @param context 角色与账号上下文
  * @param params 原接口参数
+ * @param probe 测试请求覆盖项
  * @returns 未转换的原始响应
  */
-export declare function execute(operation: string, context: RequestContext, params?: Record<string, any>): Promise<ApiResponse<any>>;
+export declare function execute(operation: string, context: RequestContext, params?: Record<string, any>, probe?: RequestProbeOptions): Promise<ApiResponse<any>>;
 /** 兼容原神 getData 的缓存和 api 字段，保留完整响应。
  * @param api 旧请求实例
  * @param type 旧操作名

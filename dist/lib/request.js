@@ -76,9 +76,10 @@ export async function request(operation, context, params) {
  * @param operation 原插件接口名
  * @param context 角色与账号上下文
  * @param params 原接口参数
+ * @param probe 测试请求覆盖项
  * @returns 未转换的原始响应
  */
-export async function execute(operation, context, params = {}) {
+export async function execute(operation, context, params = {}, probe = {}) {
     const op = aliases[operation] || operation;
     if (!core.has(op))
         throw new Error(`尚未接管接口：${operation}`);
@@ -295,6 +296,16 @@ export async function execute(operation, context, params = {}) {
             for (const [key, value] of Object.entries(fields))
                 query.set(key, value);
     }
+    if (probe.body !== undefined) {
+        const fields = body ? JSON.parse(body) : null;
+        body = JSON.stringify(fields && typeof fields === 'object' && !Array.isArray(fields) &&
+            probe.body && typeof probe.body === 'object' && !Array.isArray(probe.body)
+            ? { ...fields, ...probe.body }
+            : probe.body);
+    }
+    const method = probe.method || (body ? 'POST' : 'GET');
+    if (method === 'GET' && body)
+        throw new Error('GET 请求不能携带 body');
     const q = query.toString();
     const version = zzzProfile ? (cn ? '2.73.1' : '2.57.1') : cn ? '2.40.1' : '2.55.0';
     const headers = new Headers(params.headers);
@@ -336,11 +347,11 @@ export async function execute(operation, context, params = {}) {
         ? AbortSignal.any([context.signal, AbortSignal.timeout(10000)])
         : AbortSignal.timeout(10000);
     const response = await fetch(q ? `${url}?${q}` : url, {
-        method: body ? 'POST' : 'GET',
+        method,
         headers,
         body: body || undefined,
         signal,
-    });
+    }, probe.history);
     if (isSign) {
         const raw = await response.text();
         if (!response.ok)
