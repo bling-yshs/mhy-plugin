@@ -75,13 +75,14 @@ try {
         const id = String(item.stuid || item.ltuid || item.account_id || '')
         if (
           (item.stoken && typeof item.stoken !== 'string') ||
-          (item.mid && typeof item.mid !== 'string')
+          (item.mid && typeof item.mid !== 'string') ||
+          (item.ltoken && typeof item.ltoken !== 'string')
         ) {
           report.push({
             accountId: id,
             source: file,
             status: 'invalid',
-            reason: 'SToken 或 MID 类型错误',
+            reason: 'SToken、LToken 或 MID 类型错误',
           })
           continue
         }
@@ -89,6 +90,7 @@ try {
           source: file,
           userId: String(item.userId ?? file.replace(/\.ya?ml$/i, '')),
           stoken: item.stoken,
+          ltoken: item.ltoken,
           mid: item.mid,
         })
       }
@@ -157,7 +159,58 @@ try {
     const updates = {}
     let conflict = false
     const tokens = entries.filter((item) => item.stoken || item.mid)
+    const sourceStokens = new Set(tokens.map((item) => item.stoken).filter(Boolean))
+    if (
+      account.stoken &&
+      sourceStokens.size &&
+      (sourceStokens.size !== 1 || !sourceStokens.has(account.stoken))
+    ) {
+      report.push({
+        accountId: id,
+        status: 'conflict',
+        reason: '目标 SToken 与逍遥来源不一致，可能已重新绑定，已跳过',
+      })
+      continue
+    }
+    const ckLtoken = /(?:^|;)\s*ltoken=([^;]*)/i.exec(account.ck || '')
+    const embeddedStoken = ckLtoken?.[1]?.trim()
+    let ckRepairReason
+    if (source && /^v2_/i.test(embeddedStoken || '')) {
+      const ckAccountIds = [
+        ...(account.ck || '').matchAll(/(?:^|;)\s*(?:ltuid|account_id)=([^;]+)/gi),
+      ]
+      if (
+        ckAccountIds.some((match) => match[1].trim() !== id) ||
+        (account.stoken && account.stoken !== embeddedStoken)
+      ) {
+        report.push({
+          accountId: id,
+          status: 'conflict',
+          reason: 'CK 账号或目标 SToken 与 CK 不一致，可能已重新绑定，已跳过',
+        })
+        continue
+      }
+      if (!account.stoken) updates.stoken = embeddedStoken
+      if (sourceStokens.size === 1 && sourceStokens.has(embeddedStoken)) {
+        const sourceLtokens = new Set(
+          tokens
+            .filter((item) => item.stoken === embeddedStoken)
+            .map((item) => item.ltoken)
+            .filter(Boolean),
+        )
+        if (sourceLtokens.size === 1 && !/^v2_/i.test([...sourceLtokens][0])) {
+          const actualLtoken = [...sourceLtokens][0]
+          const fieldPrefix = ckLtoken[0].slice(0, -ckLtoken[1].length)
+          updates.ck = account.ck.replace(ckLtoken[0], `${fieldPrefix}${actualLtoken}`)
+        } else {
+          ckRepairReason = '逍遥 LToken 缺失、存在差异或格式异常，CK 保持原值'
+        }
+      } else {
+        ckRepairReason = '逍遥 SToken 与 CK 不一致或存在差异，CK 保持原值'
+      }
+    }
     for (const key of ['stoken', 'mid']) {
+      if (updates[key]) continue
       if (account[key]) continue
       const values = new Set(tokens.map((item) => item[key]).filter(Boolean))
       if (values.size > 1)
@@ -210,6 +263,13 @@ try {
     if (apply)
       await target.writeTransaction(async (transaction) => {
         const current = await target.MysUserDB.findByPk(id, { transaction })
+        if (!current) throw new Error('目标账号在导入期间被删除，请重新预览')
+        if (
+          embeddedStoken &&
+          ((current.ck ?? null) !== (account.ck ?? null) ||
+            (current.stoken ?? null) !== (account.stoken ?? null))
+        )
+          throw new Error('目标凭据在导入期间发生变更，请重新预览')
         for (const key of Object.keys(updates))
           if ((current.get(key) ?? null) !== (account[key] ?? null))
             throw new Error('目标数据在导入期间发生变更，请重新预览')
@@ -236,6 +296,7 @@ try {
       accountId: id,
       status: changed ? (apply ? 'imported' : 'would-import') : 'unchanged',
       fields: Object.keys(updates),
+      ...(ckRepairReason ? { reason: ckRepairReason } : {}),
     })
   }
   console.log(JSON.stringify({ mode: apply ? 'apply' : 'preview', records: report }, null, 2))
