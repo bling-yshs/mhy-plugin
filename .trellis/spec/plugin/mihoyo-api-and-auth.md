@@ -41,6 +41,15 @@ GET api-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie?game_biz=hk4e_cn
 
 ## Passport 请求
 
+### SToken 命令
+
+- `src/apps/stoken.ts` 注册 `#刷新ck` 和 `#更新抽卡记录`（含 `#原神更新抽卡记录`），服务位于 `src/lib/stoken.ts`。
+- 刷新 CK 遍历主用户绑定账号：调用 Passport `getLTokenBySToken` 获取独立 LToken，再沿用现有 Takumi `getCookieAccountInfoBySToken` 兑换 Cookie Token。全部兑换成功后仅更新 `ck`，通过账号事件同步兼容缓存；事务内检查绑定和凭据快照，避免覆盖并发扫码或解绑。
+- 抽卡命令使用当前已绑定的国服原神 UID，通过 `genAuthKey` 兑换 authkey，再调用 genshin `GachaLog.logUrl()`。其他游戏与国际服未纳入本次命令范围。
+- 所有 DS1、DS2 签名统一调用 `src/lib/sign.ts` 的 `createSignDs(salt)`、`createDs(query, body, salt)`；业务模块只传入端点所需参数，禁止重复实现时间戳、随机串和签名计算。`createSignDs` 默认盐供游戏签到使用，`genAuthKey` 传入该端点的盐。
+- 外部插件和本地 SDK 仅提供端点、字段和认证参数参考，实现复用本插件的公共方法。LToken Cookie 请求参考本地 SDK `src/passport.tsp`。新增命令尚未执行真实账号在线验证。
+- CK 刷新冷却 60 秒、抽卡更新冷却 300 秒，同时限制进程内重复执行。authkey 仅在内部导入事件中传递，导入异常回复使用固定消息，避免异常 URL 暴露凭据。
+
 `src/main2.ts` 与 `xiaoyao-cvs-plugin` 研究表明 App QR 请求包含 `x-rpc-device_id`、`x-rpc-app_id`、设备信息、应用版本、客户端类型、DS、SDK 版本和 User-Agent 等 Header。
 
 Header 与 DS 生成属于协议实现，应集中在认证服务中。修改 salt、App 版本、客户端类型或 Header 集合前，记录来源和验证方式。
