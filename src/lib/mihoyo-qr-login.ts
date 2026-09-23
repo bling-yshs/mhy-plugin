@@ -5,6 +5,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import QRCode from 'qrcode'
 import fetch from './fetch.js'
 import { getAccounts, saveLogin } from './accounts.js'
+import { getLTokenBySToken } from './stoken.js'
 
 const QR_APP_ID = 'bll8iq97cem8'
 const APP_VERSION = '2.71.1'
@@ -272,26 +273,17 @@ async function getCookieTokenBySToken(
 
 /** 按游戏查询绑定角色，保持 Demo 的请求结构。
  * @param state 登录会话
- * @param login 已确认账号
- * @param cookieToken 已兑换凭据
+ * @param cookie 已兑换的完整 CK
  * @param gameBiz 游戏业务标识
  * @returns 角色列表
  */
 async function getGenshinRoles(
   state: LoginState,
-  login: { accountId: string; stoken: string },
-  cookieToken: string,
+  cookie: string,
   gameBiz: string,
 ) {
   const query = `game_biz=${gameBiz}`
   const url = `${GAME_ROLES_URL}?${query}`
-  const cookie = [
-    `ltoken=${login.stoken}`,
-    `ltuid=${login.accountId}`,
-    `cookie_token=${cookieToken}`,
-    `account_id=${login.accountId}`,
-  ].join('; ')
-
   const result = await httpJson<ApiResponse<{ list: GameRole[] }>>(url, {
     signal: state.signal,
     key: 'app_get_genshin_roles',
@@ -387,11 +379,12 @@ export async function waitForLogin(
       if (!session.qr) throw new Error('二维码尚未就绪')
       const state = session.state
       const login = await waitForQrConfirmed(state, session.qr.ticket, onStatus)
+      const ltoken = await getLTokenBySToken(login.accountId, login.stoken, login.mid, state.signal)
       const token = await getCookieTokenBySToken(state, login)
+      const cookie = `ltoken=${ltoken}; ltuid=${login.accountId}; cookie_token=${token}; account_id=${login.accountId}`
       const roles: GameRole[] = []
       for (const biz of ['hk4e_cn', 'hkrpg_cn', 'nap_cn'])
-        roles.push(...(await getGenshinRoles(state, login, token, biz)))
-      const cookie = `ltoken=${login.stoken}; ltuid=${login.accountId}; cookie_token=${token}; account_id=${login.accountId}`
+        roles.push(...(await getGenshinRoles(state, cookie, biz)))
       await saveLogin(
         session.userId,
         {

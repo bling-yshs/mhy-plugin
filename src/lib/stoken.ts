@@ -16,7 +16,12 @@ const refreshing = new Set<string>()
  * @returns 接口返回的凭据数据
  */
 async function requestToken(url: string, init: RequestInit, label: string): Promise<TokenData> {
-  const response = await fetch(url, { ...init, signal: AbortSignal.timeout(15000) })
+  const response = await fetch(url, {
+    ...init,
+    signal: init.signal
+      ? AbortSignal.any([init.signal, AbortSignal.timeout(15000)])
+      : AbortSignal.timeout(15000),
+  })
   if (!response.ok) throw new Error(`${label}失败：HTTP ${response.status}`)
   const payload = (await response.json()) as {
     retcode: number
@@ -25,6 +30,30 @@ async function requestToken(url: string, init: RequestInit, label: string): Prom
   if (payload.retcode !== 0 || !payload.data)
     throw new Error(`${label}失败：返回码 ${payload.retcode}，请尝试重新扫码登录`)
   return payload.data
+}
+
+/** 使用 SToken 兑换独立的 LToken。
+ * @param accountId 米游社账号 ID
+ * @param stoken 扫码取得的 SToken
+ * @param mid 米游社 MID
+ * @param signal 会话取消信号
+ * @returns 兑换得到的 LToken
+ */
+export async function getLTokenBySToken(
+  accountId: string,
+  stoken: string,
+  mid?: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const cookie = `stuid=${accountId};stoken=${stoken};${mid ? `mid=${mid};` : ''}`
+  const data = await requestToken(
+    'https://passport-api.mihoyo.com/account/auth/api/getLTokenBySToken',
+    { headers: { Cookie: cookie, 'User-Agent': 'Mozilla/5.0 miHoYoBBS/2.71.1' }, signal },
+    '获取 ltoken',
+  )
+  if (!data.ltoken || data.ltoken === stoken || /^v2_/i.test(data.ltoken))
+    throw new Error('获取 ltoken 失败：响应缺少有效的 LToken，请重新扫码登录')
+  return data.ltoken
 }
 
 /** 用发送者已绑定账号的 SToken 兑换 LToken 和 Cookie Token，并刷新兼容缓存。
@@ -49,12 +78,7 @@ export async function refreshUserCookies(userId: string): Promise<string[]> {
     try {
       const cookie = `stuid=${accountId};stoken=${account.stoken};${account.mid ? `mid=${account.mid};` : ''}`
       const headers = { Cookie: cookie, 'User-Agent': 'Mozilla/5.0 miHoYoBBS/2.71.1' }
-      const ltoken = await requestToken(
-        'https://passport-api.mihoyo.com/account/auth/api/getLTokenBySToken',
-        { headers },
-        '获取 ltoken',
-      )
-      if (!ltoken.ltoken) throw new Error('响应缺少 ltoken，请重新扫码登录')
+      const ltoken = await getLTokenBySToken(accountId, account.stoken, account.mid ?? undefined)
       const query = new URLSearchParams({
         game_biz: 'hk4e_cn',
         uid: accountId,
@@ -67,7 +91,7 @@ export async function refreshUserCookies(userId: string): Promise<string[]> {
         '获取 cookie_token',
       )
       if (!token.cookie_token) throw new Error('响应缺少 cookie_token，请重新扫码登录')
-      const ck = `ltoken=${ltoken.ltoken};ltuid=${accountId};cookie_token=${token.cookie_token};account_id=${accountId};`
+      const ck = `ltoken=${ltoken};ltuid=${accountId};cookie_token=${token.cookie_token};account_id=${accountId};`
       await writeTransaction(async (transaction) => {
         const current = await MysUserDB.findByPk(accountId, { transaction })
         const user = await UserDB.findByPk(userId, { transaction })

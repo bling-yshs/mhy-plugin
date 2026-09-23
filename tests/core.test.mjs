@@ -196,6 +196,8 @@ test('扫码确认、三游戏角色查询和重启读取所需凭据闭环', as
       })
     if (url.pathname.endsWith('getCookieAccountInfoBySToken'))
       return response({ retcode: 0, data: { cookie_token: 'scan-cookie' } })
+    if (url.pathname.endsWith('getLTokenBySToken'))
+      return response({ retcode: 0, data: { ltoken: 'l_scan' } })
     return response({
       retcode: 0,
       data: {
@@ -209,7 +211,9 @@ test('扫码确认、三游戏角色查询和重启读取所需凭据闭环', as
   assert.ok(Buffer.isBuffer(session.image))
   const result = await api.waitForLogin(session)
   assert.equal(result.roles.length, 3)
-  assert.equal((await db.MysUserDB.findByPk('102')).stoken, 'v2_scan')
+  const account = await db.MysUserDB.findByPk('102')
+  assert.equal(account.stoken, 'v2_scan')
+  assert.match(account.ck, /(?:^|;)\s*ltoken=l_scan(?:;|$)/)
   assert.equal(calls.filter((url) => url.endsWith('getUserGameRolesByCookie')).length, 3)
 })
 
@@ -298,6 +302,8 @@ test('扫码过期和角色查询失败保持旧凭据', async () => {
       })
     if (url.includes('getCookieAccountInfoBySToken'))
       return response({ retcode: 0, data: { cookie_token: 'new' } })
+    if (url.endsWith('getLTokenBySToken'))
+      return response({ retcode: 0, data: { ltoken: 'l_new' } })
     return response({ retcode: -100, message: 'invalid', data: {} })
   }
   const failed = await api.startLogin('qq102')

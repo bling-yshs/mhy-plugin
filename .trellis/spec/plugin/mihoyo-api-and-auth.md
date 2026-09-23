@@ -12,6 +12,8 @@ POST passport-api.mihoyo.com/account/ma-cn-passport/app/queryQRLoginStatus
 Confirmed
   -> data.tokens + data.user_info
   -> SToken + accountId + mid
+GET passport-api.mihoyo.com/account/auth/api/getLTokenBySToken
+  -> LToken
 GET api-takumi.mihoyo.com/auth/api/getCookieAccountInfoBySToken
   -> cookie_token
 GET api-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie?game_biz=hk4e_cn
@@ -33,10 +35,10 @@ GET api-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie?game_biz=hk4e_cn
 
 ## 凭据语义
 
-- App QR 的确认响应提供 SToken；Cookie Token 由 `getCookieAccountInfoBySToken` 兑换得到。
+- App QR 的确认响应提供 SToken；`getLTokenBySToken` 兑换 LToken，`getCookieAccountInfoBySToken` 兑换 Cookie Token。扫码完成后将 SToken 写入独立字段，并将兑换得到的 LToken 写入 CK 的 `ltoken`。
 - SToken 与 Cookie Token 分开保存，并记录更新时间和兑换所需的账号字段。
 - Cookie Token 失效时优先尝试使用有效 SToken 重新兑换。
-- LToken 与 SToken 维持不同领域字段。参考实现把 SToken 放入 `ltoken` Cookie 的行为属于兼容观察，协议依据仍需验证。
+- LToken 与 SToken 维持不同领域字段。LToken 兑换失败时终止扫码保存。
 - `cookie_token` 与 `cookie_token_v2`、`stoken` 与 `stoken_v2` 均保持明确版本信息。
 
 ## Passport 请求
