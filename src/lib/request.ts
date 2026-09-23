@@ -1,10 +1,16 @@
 import { createHash } from 'node:crypto'
 import fetch from './fetch.js'
-import { createDs } from './sign.js'
+import { createDs, createSignDs } from './sign.js'
 import { accountIdFromCookie, resolveAccount } from './accounts.js'
 import { MysUserDB } from '../db/index.js'
 import { ensureDevice, refreshDevice, registerDeviceSession } from './devices.js'
-import type { ApiResponse, Device, Game, Operations, RequestContext } from '../types/api.js'
+import type { ApiResponse, Device, Game, JsonValue, Operations, RequestContext } from '../types/api.js'
+
+export type RequestProbeOptions = {
+  method?: 'GET' | 'POST'
+  body?: JsonValue
+  history?: boolean
+}
 
 const aliases: Record<string, string> = {
   zzzNote: 'dailyNote',
@@ -13,12 +19,22 @@ const aliases: Record<string, string> = {
   zzzBuddyList: 'buddy',
 }
 const core = new Set([
+  'bbs_sign_info',
+  'bbs_sign_home',
+  'bbs_sign',
   'index',
   'dailyNote',
   'character',
   'characterDetail',
   'avatarInfo',
   'basicInfo',
+  'ys_ledger',
+  'detail',
+  'avatarSkill',
+  'spiralAbyss',
+  'role_combat',
+  'hard_challenge',
+  'hard_challenge_popularity',
   'zzzAvatarInfo',
   'zzzExplorationDetail',
   'buddy',
@@ -83,12 +99,14 @@ export async function request<K extends keyof Operations>(
  * @param operation 原插件接口名
  * @param context 角色与账号上下文
  * @param params 原接口参数
+ * @param probe 测试请求覆盖项
  * @returns 未转换的原始响应
  */
 export async function execute(
   operation: string,
   context: RequestContext,
   params: Record<string, any> = {},
+  probe: RequestProbeOptions = {},
 ): Promise<ApiResponse<any>> {
   const op = aliases[operation] || operation
   if (!core.has(op)) throw new Error(`尚未接管接口：${operation}`)
@@ -96,6 +114,8 @@ export async function execute(
   const uid = String(context.uid)
   const server = context.server || getServer(uid, game)
   const cn = /cn_|_cn/.test(server)
+  const isSign = ['bbs_sign_info', 'bbs_sign_home', 'bbs_sign'].includes(op)
+  if (isSign && !cn) throw new Error('当前签到仅支持国服')
   const suppliedId = accountIdFromCookie(context.cookie)
   if (context.accountId && suppliedId && String(context.accountId) !== suppliedId)
     throw new Error('请求账号与 Cookie 归属不一致')
@@ -162,7 +182,11 @@ export async function execute(
     character: game === 'gs' ? 'character/list' : 'avatar/basic',
     characterDetail: 'character/detail',
     avatarInfo: 'avatar/info',
-    basicInfo: 'role/basicInfo',
+    basicInfo: game === 'gs' ? 'gcg/basicInfo' : 'role/basicInfo',
+    spiralAbyss: game === 'gs' ? 'spiralAbyss' : 'challenge',
+    role_combat: 'role_combat',
+    hard_challenge: 'hard_challenge',
+    hard_challenge_popularity: 'hard_challenge/popularity',
     zzzAvatarInfo: 'avatar/info',
     zzzExplorationDetail: 'exploration_detail',
     buddy: 'buddy/info',
@@ -182,9 +206,63 @@ export async function execute(
     query.set('server', server)
   }
   if (op === 'zzzAvatarInfo') query.set('need_wiki', String(params.need_wiki ?? false))
+  if (op === 'spiralAbyss' || op === 'role_combat' || op === 'hard_challenge') {
+    if (op === 'spiralAbyss') query.set('schedule_type', String(params.schedule_type || 1))
+    if (op === 'role_combat' || op === 'hard_challenge')
+      query.set('need_detail', String(params.need_detail ?? true))
+    for (const key of ['schedule_type', 'need_detail', 'need_all']) {
+      if (params[key] !== undefined) query.set(key, String(params[key]))
+    }
+    if (op === 'role_combat' && params.active !== undefined)
+      query.set('active', String(params.active))
+  }
   if (params.avatar_list_type !== undefined)
     query.set('avatar_list_type', String(params.avatar_list_type))
   if (params.id_list) for (const id of params.id_list) query.append('id_list[]', String(id))
+  let url = `${host}${prefix}/${paths[op]}`
+  if (op === 'ys_ledger' || op === 'detail' || op === 'avatarSkill') {
+    if (game === 'zzz' || (op === 'avatarSkill' && game !== 'gs'))
+      throw new Error(`游戏 ${game} 不支持接口：${operation}`)
+    for (const key of [...query.keys()]) query.delete(key)
+    const eventHost = cn ? 'https://api-takumi.mihoyo.com' : 'https://sg-public-api.hoyolab.com'
+    if (op === 'ys_ledger') {
+      if (params.month === undefined) throw new Error('缺少 month')
+      query.set('month', String(params.month))
+      if (game === 'gs' && cn) {
+        url = 'https://hk4e-api.mihoyo.com/event/ys_ledger/monthInfo'
+        query.set('bind_uid', uid)
+        query.set('bind_region', server)
+      } else {
+        url =
+          game === 'gs'
+            ? 'https://sg-hk4e-api.hoyolab.com/event/ysledgeros/month_info'
+            : `${eventHost}/event/srledger/month_info`
+        query.set('lang', 'zh-cn')
+        query.set('role_id', uid)
+        query.set('server', server)
+      }
+    } else {
+      if (params.avatar_id === undefined) throw new Error('缺少 avatar_id')
+      if (game === 'sr') {
+        url = `${eventHost}/event/rpgcalc/avatar/detail`
+        query.set('game', 'hkrpg')
+        query.set('lang', 'zh-cn')
+        query.set('item_id', String(params.avatar_id))
+        query.set('tab_from', String(params.tab_from ?? 'TabOwned'))
+        query.set('change_target_level', '0')
+      } else {
+        const calculator = cn ? 'e20200928calculate/v1' : 'calculateos'
+        const path = op === 'detail' ? 'sync/avatar/detail' : cn ? 'avatarSkill/list' : 'avatar/skill_list'
+        url = `${eventHost}/event/${calculator}/${path}`
+        if (!cn) query.set('lang', 'zh-cn')
+        query.set('avatar_id', String(params.avatar_id))
+      }
+      if (op === 'detail') {
+        query.set('uid', uid)
+        query.set('region', server)
+      }
+    }
+  }
   if (params.query) {
     const entries =
       typeof params.query === 'string'
@@ -210,7 +288,6 @@ export async function execute(
     })
     for (const key of [...query.keys()]) query.delete(key)
   }
-  let url = `${host}${prefix}/${paths[op]}`
   if (op === 'zzzUser') {
     prefix = cn ? 'https://api-takumi.mihoyo.com' : 'https://sg-public-api.hoyolab.com'
     url = `${prefix}/binding/api/getUserGameRolesByCookie`
@@ -219,6 +296,26 @@ export async function execute(
     query.set('region', server)
     query.set('game_uid', uid)
   }
+  if (isSign) {
+    const actId = { gs: 'e202311201442471', sr: 'e202304121516551', zzz: 'e202406242138391' }[game]
+    const action = op === 'bbs_sign' ? 'sign' : op === 'bbs_sign_info' ? 'info' : 'home'
+    url = `https://api-takumi.mihoyo.com/event/luna/${action}`
+    for (const key of [...query.keys()]) query.delete(key)
+    const fields = { act_id: actId, region: server, uid, lang: 'zh-cn' }
+    if (op === 'bbs_sign') body = JSON.stringify(fields)
+    else for (const [key, value] of Object.entries(fields)) query.set(key, value)
+  }
+  if (probe.body !== undefined) {
+    const fields = body ? (JSON.parse(body) as JsonValue) : null
+    body = JSON.stringify(
+      fields && typeof fields === 'object' && !Array.isArray(fields) &&
+      probe.body && typeof probe.body === 'object' && !Array.isArray(probe.body)
+        ? { ...fields, ...probe.body }
+        : probe.body,
+    )
+  }
+  const method = probe.method || (body ? 'POST' : 'GET')
+  if (method === 'GET' && body) throw new Error('GET 请求不能携带 body')
   const q = query.toString()
   const version = zzzProfile ? (cn ? '2.73.1' : '2.57.1') : cn ? '2.40.1' : '2.55.0'
   const headers = new Headers(params.headers)
@@ -254,16 +351,32 @@ export async function execute(
     }
   }
   headers.set('DS', createDs(q, body, cn ? undefined : 'okr4obncj8bw5a65hbnn5oo6ixjc3l9w'))
+  if (isSign) {
+    headers.set('DS', createSignDs())
+    headers.set('Origin', 'https://act.mihoyo.com')
+    headers.set('Referer', 'https://act.mihoyo.com')
+    headers.set('X-Requested-With', 'com.mihoyo.hyperion')
+    if (game !== 'sr') headers.set('x-rpc-signgame', game === 'gs' ? 'hk4e' : 'zzz')
+  }
   if (body) headers.set('Content-Type', 'application/json')
   const signal = context.signal
     ? AbortSignal.any([context.signal, AbortSignal.timeout(10000)])
     : AbortSignal.timeout(10000)
   const response = await fetch(q ? `${url}?${q}` : url, {
-    method: body ? 'POST' : 'GET',
+    method,
     headers,
     body: body || undefined,
     signal,
-  })
+  }, probe.history)
+  if (isSign) {
+    const raw = await response.text()
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${raw}`)
+    try {
+      return JSON.parse(raw)
+    } catch {
+      throw new Error(`签到响应非 JSON：${raw}`)
+    }
+  }
   if (!response.ok) throw new Error(`米游社请求失败：HTTP ${response.status}`)
   return (await response.json()) as ApiResponse<any>
 }
@@ -282,6 +395,7 @@ export async function legacyGetData(
   cached = false,
 ): Promise<ApiResponse<any> | false> {
   const game: Game = type.startsWith('zzz') ? 'zzz' : api.game || 'gs'
+  const isSign = ['bbs_sign_info', 'bbs_sign_home', 'bbs_sign'].includes(type)
   const account = await MysUserDB.findByPk(accountIdFromCookie(api.cookie) || '0')
   const hash = createHash('sha256')
     .update(
@@ -290,7 +404,7 @@ export async function legacyGetData(
     .digest('hex')
   const cacheKey = `mhy:query:${hash}`
   try {
-    const hit = globalThis.redis && (await redis.get(cacheKey))
+    const hit = !isSign && globalThis.redis && (await redis.get(cacheKey))
     if (hit) return JSON.parse(hit)
     const result = await execute(
       type,
@@ -305,7 +419,7 @@ export async function legacyGetData(
       data,
     )
     result.api = type
-    if (cached && result.retcode === 0 && globalThis.redis)
+    if (!isSign && cached && result.retcode === 0 && globalThis.redis)
       await redis.setEx(cacheKey, api.cacheCd || 300, JSON.stringify(result))
     return result
   } catch (error) {

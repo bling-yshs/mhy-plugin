@@ -1,4 +1,4 @@
-import { MysUserDB, UserDB, writeTransaction } from '../db/index.js'
+import { AutoSignSettingDB, MysUserDB, UserDB, writeTransaction } from '../db/index.js'
 import { notifyAccountChange } from './account-events.js'
 import type { Game, GameRole, LoginDevice } from '../types/api.js'
 
@@ -138,7 +138,10 @@ export async function unlinkAccount(userId: string, accountId: string): Promise<
     const others = (await UserDB.findAll({ transaction })).some((item) =>
       (item.ltuids || '').split(',').includes(String(accountId)),
     )
-    if (!others) await MysUserDB.destroy({ where: { ltuid: accountId }, transaction })
+    if (!others) {
+      await AutoSignSettingDB.destroy({ where: { ltuid: accountId }, transaction })
+      await MysUserDB.destroy({ where: { ltuid: accountId }, transaction })
+    }
     return !others
   })
   await notifyAccountChange({ accountId, userIds: [String(userId)], deleted })

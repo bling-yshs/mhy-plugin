@@ -12,9 +12,7 @@ try {
   log.error?.(error)
 }
 
-const results = await Promise.allSettled(
-  files.map((file) => import(new URL(file, appsDir).href)),
-)
+const results = await Promise.allSettled(files.map((file) => import(new URL(file, appsDir).href)))
 
 for (let i = 0; i < files.length; i += 1) {
   const file = files[i]

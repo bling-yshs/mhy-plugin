@@ -40,12 +40,34 @@ export type RequestContext = {
   profile?: 'genshin' | 'zzz'
 }
 export interface Operations {
+  bbs_sign_info: { params: Record<string, never>; data: Record<string, JsonValue> }
+  bbs_sign_home: { params: Record<string, never>; data: Record<string, JsonValue> }
+  bbs_sign: { params: Record<string, never>; data: Record<string, JsonValue> }
   index: { params: { avatar_list_type?: number }; data: Record<string, JsonValue> }
   dailyNote: { params: Record<string, never>; data: Record<string, JsonValue> }
   character: { params: Record<string, never>; data: Record<string, JsonValue> }
   characterDetail: { params: { character_ids: number[] }; data: GenshinCharacterDetailData }
   avatarInfo: { params: { need_wiki?: boolean }; data: Record<string, JsonValue> }
   basicInfo: { params: Record<string, never>; data: Record<string, JsonValue> }
+  ys_ledger: { params: { month: number | string }; data: Record<string, JsonValue> }
+  detail: {
+    params: { avatar_id: number | string; tab_from?: string }
+    data: Record<string, JsonValue>
+  }
+  avatarSkill: { params: { avatar_id: number | string }; data: Record<string, JsonValue> }
+  spiralAbyss: {
+    params: { schedule_type?: number; need_detail?: boolean; need_all?: boolean }
+    data: Record<string, JsonValue>
+  }
+  role_combat: {
+    params: { active?: number; schedule_type?: number; need_detail?: boolean; need_all?: boolean }
+    data: Record<string, JsonValue>
+  }
+  hard_challenge: {
+    params: { schedule_type?: number; need_detail?: boolean; need_all?: boolean }
+    data: Record<string, JsonValue>
+  }
+  hard_challenge_popularity: { params: Record<string, never>; data: Record<string, JsonValue> }
   zzzAvatarInfo: {
     params: { id_list?: number[]; need_wiki?: boolean }
     data: Record<string, JsonValue>
