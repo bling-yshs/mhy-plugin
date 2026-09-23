@@ -1,14 +1,15 @@
 import { createHash, randomInt } from 'node:crypto';
-/** 生成游戏签到使用的 DS1，协议沿用 GT-Manual。
- * @returns 签到 DS 请求头
+/** 生成公共 DS1 签名，默认使用游戏签到的盐。
+ * @param salt 对应端点的盐
+ * @returns DS 请求头
  */
-export function createSignDs() {
+export function createSignDs(salt = 'jEpJb9rRARU2rXDA9qYbZ3selxkuct9a') {
     const t = Math.floor(Date.now() / 1000);
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     let r = '';
     for (let i = 0; i < 6; i++)
         r += chars[randomInt(chars.length)];
-    const hash = createHash('md5').update(`salt=jEpJb9rRARU2rXDA9qYbZ3selxkuct9a&t=${t}&r=${r}`).digest('hex');
+    const hash = createHash('md5').update(`salt=${salt}&t=${t}&r=${r}`).digest('hex');
     return `${t},${r},${hash}`;
 }
 /** 对最终查询串和请求体计算 DS2。
