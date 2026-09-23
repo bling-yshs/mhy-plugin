@@ -46,9 +46,7 @@ export class MhyServerMonitor extends plugin {
         busy: false,
         send: this.e.group.sendMsg.bind(this.e.group),
       })
-      await this.reply(
-        '开服监控已开启，每 30 秒检查一次',
-      )
+      await this.reply('开服监控已开启，每 30 秒检查一次')
     }
     return true
   }

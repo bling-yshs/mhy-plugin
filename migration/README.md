@@ -39,11 +39,11 @@ node migration/upgrade-database.mjs --database '实际SQLite绝对路径'
 默认模式仅预览；读取来源 YAML 和 Redis，保持来源原样。请在机器人停止时执行正式导入，随后重启以重新加载所有缓存。
 
 ```powershell
-node migration/import-legacy.mjs --database '实际SQLite绝对路径'
-node migration/import-legacy.mjs --database '实际SQLite绝对路径' --apply
+node migration/import-legacy.mjs --database '实际SQLite绝对路径' --stokens '/app/bkpg/data/yaml'
+node migration/import-legacy.mjs --database '实际SQLite绝对路径' --stokens '/app/bkpg/data/yaml' --apply
 ```
 
-逍遥 YAML 默认目录是相邻插件的 `data/yaml`，可通过 `--stokens '目录'` 指定。读取设备记录时，预先在进程环境设置 `MHY_IMPORT_REDIS_URL`。该脚本仅使用 Redis 的 SCAN 和 GET。
+逍遥 YAML 目录通过 `--stokens '目录绝对路径'` 手动指定，读取目录内的 `.yaml`／`.yml` 文件；不传该参数时跳过 YAML 导入。指定的目录不存在时直接报错。读取设备记录时，预先在进程环境设置 `MHY_IMPORT_REDIS_URL`。该脚本仅使用 Redis 的 SCAN 和 GET。
 
 当同账号的设备来源冲突时，可明确选择一个来源：
 
@@ -55,10 +55,11 @@ node migration/import-legacy.mjs --database '实际SQLite绝对路径' --device-
 导入规则：
 
 - 按米游社账号归并；目标需已有该账号的 CK 记录。
-- SToken 必须具备 MID。缺失字段及无法识别的数据列入报告。
-- 从用户 YAML 文件名恢复 QQ 关联；数字 QQ 可创建新用户关系。
+- YAML 的 `stuid` 对应 `MysUsers.ltuid`。仅导入 `stoken`、`mid`，缺少 MID 也可导入 SToken；不导入 `ltoken`。
+- 两个字段分别处理：目标为空才补入，已有值保留；来源缺失的字段跳过。多个来源对同一空字段提供不同值时报告冲突并跳过该字段。
+- 优先使用条目的 `userId` 恢复 QQ 关联，缺失时使用 YAML 文件名；数字 QQ 可创建新用户关系。
 - 相同记录重复导入显示 `unchanged`。
-- 目标已有不同凭据或设备时显示 `conflict` 并跳过；显式来源选择仅解决来源间设备冲突。
+- 目标已有不同设备时显示 `conflict` 并跳过；显式来源选择仅解决来源间设备冲突。
 - ZZZ 安卓设备缺少原 ID 时使用确定性 ID，导入后重新取得指纹；手动指纹缺少设备 ID 时跳过。
 - 正式导入前再次校验目标字段，避免覆盖导入期间发生的变化。
 - 报告只含账号、来源、状态与字段名。

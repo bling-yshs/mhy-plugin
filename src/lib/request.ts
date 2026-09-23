@@ -4,7 +4,13 @@ import { createDs, createSignDs } from './sign.js'
 import { accountIdFromCookie, resolveAccount } from './accounts.js'
 import { MysUserDB } from '../db/index.js'
 import { ensureDevice, refreshDevice, registerDeviceSession } from './devices.js'
-import type { ApiResponse, Device, Game, Operations, RequestContext } from '../types/api.js'
+import type { ApiResponse, Device, Game, JsonValue, Operations, RequestContext } from '../types/api.js'
+
+export type RequestProbeOptions = {
+  method?: 'GET' | 'POST'
+  body?: JsonValue
+  history?: boolean
+}
 
 const aliases: Record<string, string> = {
   zzzNote: 'dailyNote',
@@ -93,12 +99,14 @@ export async function request<K extends keyof Operations>(
  * @param operation 原插件接口名
  * @param context 角色与账号上下文
  * @param params 原接口参数
+ * @param probe 测试请求覆盖项
  * @returns 未转换的原始响应
  */
 export async function execute(
   operation: string,
   context: RequestContext,
   params: Record<string, any> = {},
+  probe: RequestProbeOptions = {},
 ): Promise<ApiResponse<any>> {
   const op = aliases[operation] || operation
   if (!core.has(op)) throw new Error(`尚未接管接口：${operation}`)
@@ -297,6 +305,17 @@ export async function execute(
     if (op === 'bbs_sign') body = JSON.stringify(fields)
     else for (const [key, value] of Object.entries(fields)) query.set(key, value)
   }
+  if (probe.body !== undefined) {
+    const fields = body ? (JSON.parse(body) as JsonValue) : null
+    body = JSON.stringify(
+      fields && typeof fields === 'object' && !Array.isArray(fields) &&
+      probe.body && typeof probe.body === 'object' && !Array.isArray(probe.body)
+        ? { ...fields, ...probe.body }
+        : probe.body,
+    )
+  }
+  const method = probe.method || (body ? 'POST' : 'GET')
+  if (method === 'GET' && body) throw new Error('GET 请求不能携带 body')
   const q = query.toString()
   const version = zzzProfile ? (cn ? '2.73.1' : '2.57.1') : cn ? '2.40.1' : '2.55.0'
   const headers = new Headers(params.headers)
@@ -344,11 +363,11 @@ export async function execute(
     ? AbortSignal.any([context.signal, AbortSignal.timeout(10000)])
     : AbortSignal.timeout(10000)
   const response = await fetch(q ? `${url}?${q}` : url, {
-    method: body ? 'POST' : 'GET',
+    method,
     headers,
     body: body || undefined,
     signal,
-  })
+  }, probe.history)
   if (isSign) {
     const raw = await response.text()
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${raw}`)
