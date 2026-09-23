@@ -10,7 +10,7 @@ export class MhyServerMonitor extends plugin {
             dsc: '原神新版本开服群通知',
             event: 'message',
             priority: 100,
-            rule: [{ reg: '^#(开启|关闭)开服监控$', fnc: 'toggle' }],
+            rule: [{ reg: '^#(开启|关闭)原神开服监控$', fnc: 'toggle' }],
         });
         this.task = {
             name: '[mhy-plugin]开服监控',
@@ -40,7 +40,7 @@ export class MhyServerMonitor extends plugin {
                 busy: false,
                 send: this.e.group.sendMsg.bind(this.e.group),
             });
-            await this.reply('开服监控已开启，每 30 秒检查一次，通知成功后自动停止。机器人重启后需重新开启。');
+            await this.reply('开服监控已开启，每 30 秒检查一次');
         }
         return true;
     }
