@@ -17,7 +17,15 @@ type task = {
 }
 
 declare global {
-  var Bot: typeof Client.prototype
+  var Bot: typeof Client.prototype & {
+    /** 使用指定机器人向群发送消息。
+     * @param botId 机器人 ID
+     * @param groupId 群 ID
+     * @param message 群消息
+     * @returns 消息回执，发送失败时为空或 false
+     */
+    sendGroupMsg(botId: string, groupId: string, message: Sendable): Promise<MessageRet | boolean | undefined>
+  }
   var redis: redisM.RedisClientType
   var segment: typeof segmentSource
   var logger: {

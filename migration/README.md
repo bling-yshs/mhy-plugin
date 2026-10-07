@@ -55,8 +55,10 @@ node migration/import-legacy.mjs --database '实际SQLite绝对路径' --device-
 导入规则：
 
 - 按米游社账号归并；目标需已有该账号的 CK 记录。
-- YAML 的 `stuid` 对应 `MysUsers.ltuid`。仅导入 `stoken`、`mid`，缺少 MID 也可导入 SToken；不导入 `ltoken`。
-- 两个字段分别处理：目标为空才补入，已有值保留；来源缺失的字段跳过。多个来源对同一空字段提供不同值时报告冲突并跳过该字段。
+- YAML 的 `stuid` 对应 `MysUsers.ltuid`。按 `stuid` 归并同账号的多角色记录，读取 `stoken`、`ltoken` 和 `mid`；缺少 MID 也可导入 SToken。
+- 若目标 CK 的 `ltoken` 以 `v2_` 开头，视为扫码时误填的 SToken。目标 `stoken` 为空且 CK 账号 ID 一致时，将 CK 中的该值补入 `stoken`，即使逍遥 YAML 的 SToken 不同。逍遥 SToken 与 CK 中的值一致、LToken 唯一且格式正常时，再用逍遥 LToken 替换 CK 中的 `ltoken`。
+- 目标已有 SToken 且与 CK 中的 V2 值不一致、CK 账号 ID 不一致时跳过该账号。目标已有 SToken 且与逍遥来源不一致时也跳过，避免覆盖重新绑定的数据。逍遥 SToken 与 CK 不一致，或逍遥 LToken 缺失、冲突、格式异常时，CK 保持原值；空的目标 SToken 仍可由 CK 补入。报告仅显示字段名和原因，不输出凭据。
+- SToken、MID 分别处理：目标为空才补入，已有值保留；来源缺失的字段跳过。目标 SToken 与来源不一致时报告冲突并跳过该账号；多个来源对同一空字段提供不同值时报告冲突并跳过该字段。
 - 优先使用条目的 `userId` 恢复 QQ 关联，缺失时使用 YAML 文件名；数字 QQ 可创建新用户关系。
 - 相同记录重复导入显示 `unchanged`。
 - 目标已有不同设备时显示 `conflict` 并跳过；显式来源选择仅解决来源间设备冲突。
