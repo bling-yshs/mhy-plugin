@@ -1,11 +1,4 @@
 import type { Game } from '../types/api.js';
-/** 返回北京时间的日期和时分。
- * @returns 日期及 HH:mm 时间
- */
-export declare function signClock(): {
-    date: string;
-    time: string;
-};
 /** 设置发送者关联账号的对应游戏签到开关。
  * @param userId 发送者 ID
  * @param game 游戏

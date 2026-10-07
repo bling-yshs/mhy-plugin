@@ -1,16 +1,10 @@
+import dayjs from 'dayjs';
 import { AutoSignSettingDB, MysUserDB, SignRecordDB, UserDB, writeTransaction } from '../db/index.js';
 import { getAccounts } from './accounts.js';
 import { getServer, request } from './request.js';
 import { Op } from 'sequelize';
 const running = new Set();
 const gameNames = { gs: '原神', sr: '星铁', zzz: '绝区零' };
-/** 返回北京时间的日期和时分。
- * @returns 日期及 HH:mm 时间
- */
-export function signClock() {
-    const iso = new Date(Date.now() + 8 * 3600000).toISOString();
-    return { date: iso.slice(0, 10), time: iso.slice(11, 16) };
-}
 /** 设置发送者关联账号的对应游戏签到开关。
  * @param userId 发送者 ID
  * @param game 游戏
@@ -37,7 +31,7 @@ export async function setAutoSign(userId, game, enabled) {
  */
 export async function signRole(ltuid, game, uid, manual) {
     const region = getServer(uid, game);
-    const where = { game, region, uid, sign_date: signClock().date };
+    const where = { game, region, uid, sign_date: dayjs().format('YYYY-MM-DD') };
     const key = JSON.stringify(where);
     const label = `${gameNames[game]} ${uid}`;
     if (running.has(key))

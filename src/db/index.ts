@@ -125,6 +125,29 @@ export class UserDB extends BaseModel {
 }
 export class UserGameDB extends BaseModel {}
 
+export class CommissionReminderSettingDB extends Model {
+  declare bot_id: string
+  declare group_id: string
+  declare user_id: string
+  declare enabled: boolean
+  declare last_check_date: string
+}
+CommissionReminderSettingDB.init(
+  {
+    bot_id: { type: DataTypes.TEXT, allowNull: false },
+    group_id: { type: DataTypes.TEXT, allowNull: false },
+    user_id: { type: DataTypes.TEXT, primaryKey: true },
+    enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    last_check_date: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
+  },
+  {
+    sequelize,
+    tableName: 'CommissionReminderSettings',
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+  },
+)
+
 export class AutoSignSettingDB extends Model {
   declare ltuid: string
   declare game: 'gs' | 'sr' | 'zzz'
@@ -243,6 +266,7 @@ BaseModel.initDB(UserGameDB, {
 await MysUserDB.sync()
 await UserDB.sync()
 await UserGameDB.sync()
+await CommissionReminderSettingDB.sync()
 await AutoSignSettingDB.sync()
 await SignRecordDB.sync()
 

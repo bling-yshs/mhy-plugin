@@ -70,6 +70,13 @@ export declare class UserDB extends BaseModel {
 }
 export declare class UserGameDB extends BaseModel {
 }
+export declare class CommissionReminderSettingDB extends Model {
+    bot_id: string;
+    group_id: string;
+    user_id: string;
+    enabled: boolean;
+    last_check_date: string;
+}
 export declare class AutoSignSettingDB extends Model {
     ltuid: string;
     game: 'gs' | 'sr' | 'zzz';

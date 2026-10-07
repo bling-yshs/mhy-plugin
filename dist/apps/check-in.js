@@ -1,4 +1,4 @@
-import { getSignStatus, runAutoSign, setAutoSign, signClock, signUser } from '../lib/check-in.js';
+import { getSignStatus, runAutoSign, setAutoSign, signUser } from '../lib/check-in.js';
 import { getAccounts } from '../lib/accounts.js';
 export class MhyCheckIn extends plugin {
     /** 注册签到命令及北京时间每日任务。
@@ -18,17 +18,10 @@ export class MhyCheckIn extends plugin {
         });
         this.task = {
             name: '[mhy-plugin]每日签到',
-            cron: '0 * * * * *',
-            fnc: this.daily.bind(this),
+            cron: '0 2 0 * * *',
+            fnc: runAutoSign,
             log: false,
         };
-    }
-    /** 在北京时间 00:02 执行当天任务，无启动补跑。
-     * @returns 执行完成
-     */
-    async daily() {
-        if (signClock().time === '00:02')
-            await runAutoSign();
     }
     /** 切换发送者关联账号的游戏自动签到设置，开启成功时提示缺少绑定设备。
      * @returns 是否已处理
