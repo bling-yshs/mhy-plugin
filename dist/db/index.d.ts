@@ -74,8 +74,7 @@ export declare class CommissionReminderSettingDB extends Model {
     bot_id: string;
     group_id: string;
     user_id: string;
-    enabled: boolean;
-    last_check_date: string;
+    last_success_at: string;
 }
 export declare class AutoSignSettingDB extends Model {
     ltuid: string;

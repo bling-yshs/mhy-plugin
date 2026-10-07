@@ -1,4 +1,5 @@
-import { runCommissionReminders, setCommissionReminder } from '../lib/commission-reminder.js';
+import { CommissionReminderSettingDB, UserDB } from '../db/index.js';
+import { getReminderRole, runCommissionReminders } from '../lib/commission-reminder.js';
 export class MhyCommissionReminder extends plugin {
     /** 注册群内委托提醒开关及北京时间每日检查任务。
      * @returns 插件实例
@@ -18,7 +19,7 @@ export class MhyCommissionReminder extends plugin {
             log: false,
         };
     }
-    /** 在当前群开启发送者的唯一提醒，或在任意群关闭本人的提醒。
+    /** 在群内开启并保存唯一订阅，关闭时删除订阅，回复当前 UID 和状态。
      * @returns 是否已处理
      */
     async toggle() {
@@ -29,14 +30,26 @@ export class MhyCommissionReminder extends plugin {
         try {
             const userId = String(this.e.user_id);
             const enabled = this.e.msg.includes('开启');
-            await setCommissionReminder({
-                botId: String(this.e.self_id),
-                groupId: String(this.e.group_id),
-                userId,
-            }, enabled);
-            await this.reply(enabled
-                ? '原神委托提醒已开启：每天北京时间 23:00 检查当前启用的 UID，委托奖励未领取时会在本群 @ 你。'
-                : '你的原神委托提醒已关闭');
+            if (enabled) {
+                const { uid } = await getReminderRole(userId);
+                await CommissionReminderSettingDB.upsert({
+                    user_id: userId,
+                    bot_id: String(this.e.self_id),
+                    group_id: String(this.e.group_id),
+                }, { fields: ['user_id', 'bot_id', 'group_id'] });
+                await this.reply(`UID ${uid}，委托提醒已开启，检查时间每天23:00`);
+            }
+            else {
+                await CommissionReminderSettingDB.destroy({ where: { user_id: userId } });
+                const user = await UserDB.findByPk(userId);
+                const uid = user?.games.gs?.uid;
+                if (uid) {
+                    await this.reply(`UID ${uid}，委托提醒已关闭`);
+                }
+                else {
+                    await this.reply('委托提醒已关闭');
+                }
+            }
         }
         catch (error) {
             await this.reply(error instanceof Error ? error.message : String(error));

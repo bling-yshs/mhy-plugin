@@ -3,7 +3,7 @@ export declare class MhyCommissionReminder extends plugin {
      * @returns 插件实例
      */
     constructor();
-    /** 在当前群开启发送者的唯一提醒，或在任意群关闭本人的提醒。
+    /** 在群内开启并保存唯一订阅，关闭时删除订阅，回复当前 UID 和状态。
      * @returns 是否已处理
      */
     toggle(): Promise<boolean>;

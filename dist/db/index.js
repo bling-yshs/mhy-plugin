@@ -9,6 +9,7 @@ var __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExte
 import { Sequelize, DataTypes, Model, } from 'sequelize';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { migrateDatabase } from './migrations.js';
 // 测试可显式指定数据库，正常启动沿用云崽配置。
 const configUrl = new URL('../../../../lib/config/config.js', import.meta.url);
 const options = process.env.MHY_DATABASE_PATH
@@ -101,8 +102,11 @@ CommissionReminderSettingDB.init({
     bot_id: { type: DataTypes.TEXT, allowNull: false },
     group_id: { type: DataTypes.TEXT, allowNull: false },
     user_id: { type: DataTypes.TEXT, primaryKey: true },
-    enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
-    last_check_date: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
+    last_success_at: {
+        type: DataTypes.TEXT,
+        allowNull: false,
+        defaultValue: '',
+    },
 }, {
     sequelize,
     tableName: 'CommissionReminderSettings',
@@ -201,13 +205,15 @@ BaseModel.initDB(UserGameDB, {
         },
     },
 });
-// 按当前模型创建缺失的表；既有表的升级由独立迁移工具执行。
+// 创建缺失的表，然后完成已有表迁移，再提供数据库给插件业务。
 await MysUserDB.sync();
 await UserDB.sync();
 await UserGameDB.sync();
 await CommissionReminderSettingDB.sync();
 await AutoSignSettingDB.sync();
 await SignRecordDB.sync();
+if (options.dialect === 'sqlite' && options.storage !== ':memory:')
+    await migrateDatabase(sequelize, options.storage, 'db:migrate');
 let writeQueue = Promise.resolve();
 /** 串行化本插件 SQLite 写事务。
  * @param work 事务内操作
