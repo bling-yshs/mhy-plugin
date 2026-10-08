@@ -55,8 +55,8 @@ export async function runCommissionReminders() {
     for (const group of groups.values()) {
         try {
             const message = [
-                '原神今日委托奖励尚未领取，记得上线领取：\n',
-                ...group.users.flatMap(user => [segment.at(user.userId), ` UID ${user.uid}\n`]),
+                '您的原神今日委托奖励尚未领取：\n',
+                ...group.users.flatMap(user => [segment.at(user.userId), ` UID: ${user.uid}\n`]),
             ];
             const sent = await Bot.sendGroupMsg(group.botId, group.groupId, message);
             if (!sent)

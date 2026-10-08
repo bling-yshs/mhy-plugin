@@ -37,7 +37,7 @@ export class MhyCommissionReminder extends plugin {
                     bot_id: String(this.e.self_id),
                     group_id: String(this.e.group_id),
                 }, { fields: ['user_id', 'bot_id', 'group_id'] });
-                await this.reply(`UID ${uid}，委托提醒已开启，检查时间每天23:00`);
+                await this.reply(`UID ${uid}，委托提醒已开启，检查时间每天 23:00`);
             }
             else {
                 await CommissionReminderSettingDB.destroy({ where: { user_id: userId } });
