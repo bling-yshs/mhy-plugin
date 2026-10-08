@@ -8,14 +8,14 @@ export class MhyCommissionReminder extends plugin {
   constructor() {
     super({
       name: '[mhy-plugin]委托提醒',
-      dsc: '每天23点提醒领取原神每日委托奖励',
+      dsc: '每天22点提醒领取原神每日委托奖励',
       event: 'message',
       priority: 100,
       rule: [{ reg: '^#(开启|关闭)原神委托提醒$', fnc: 'toggle' }],
     })
     this.task = {
       name: '[mhy-plugin]每日委托领奖提醒',
-      cron: '0 0 23 * * *',
+      cron: '0 0 22 * * *',
       fnc: runCommissionReminders,
       log: false,
     }
@@ -42,7 +42,7 @@ export class MhyCommissionReminder extends plugin {
           },
           { fields: ['user_id', 'bot_id', 'group_id'] },
         )
-        await this.reply(`UID ${uid}，委托提醒已开启，检查时间每天 23:00`)
+        await this.reply(`UID ${uid}，委托提醒已开启，检查时间每天 22:00`)
       } else {
         await CommissionReminderSettingDB.destroy({ where: { user_id: userId } })
         const user = await UserDB.findByPk(userId)
