@@ -7,7 +7,7 @@ import fetch from './fetch.js'
 import { getAccounts, saveLogin } from './accounts.js'
 import { getLTokenBySToken } from './stoken.js'
 
-export const QR_IMAGE_SIZE = 400
+export const QR_IMAGE_SIZE = 500
 
 const QR_APP_ID = 'bll8iq97cem8'
 const APP_VERSION = '2.71.1'
@@ -356,9 +356,9 @@ export async function startLogin(userId: string): Promise<LoginSession> {
     signal.throwIfAborted()
     session.qr = await createQrLogin(session.state)
     session.image = await QRCode.toBuffer(session.qr.url, {
-      // qrcode 会在缩放后向下取整，预留半像素可避免浮点误差导致尺寸少 1 像素。
-      width: QR_IMAGE_SIZE + 0.5,
-      margin: 4,
+      width: QR_IMAGE_SIZE,
+      version: 11,
+      margin: 2,
       errorCorrectionLevel: 'H',
     })
     signal.throwIfAborted()
