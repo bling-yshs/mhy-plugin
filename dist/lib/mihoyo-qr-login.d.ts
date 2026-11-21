@@ -1,5 +1,5 @@
 import type { GameRole } from '../types/api.js';
-export declare const QR_IMAGE_SIZE = 400;
+export declare const QR_IMAGE_SIZE = 500;
 type QrCreateData = {
     url: string;
     ticket: string;

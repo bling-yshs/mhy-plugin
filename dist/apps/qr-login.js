@@ -1,4 +1,7 @@
-import { cancelLogin, QR_IMAGE_SIZE, QrLoginCancelledError, startLogin, waitForLogin, } from '../lib/mihoyo-qr-login.js';
+import { cancelLogin, QrLoginCancelledError, startLogin, waitForLogin, } from '../lib/mihoyo-qr-login.js';
+const AVATAR_BORDER = 2;
+// 100 像素包含两侧白边。
+const AVATAR_SIZE = 100 - 2 * AVATAR_BORDER;
 export class MhyQrLogin extends plugin {
     /** 注册扫码命令。
      * @returns 命令实例
@@ -29,44 +32,36 @@ export class MhyQrLogin extends plugin {
     async qrLogin() {
         const userId = String(this.e.mainUserId || this.e.originalUserId || this.e.user_id);
         const qq = String(this.e.originalUserId || this.e.user_id);
-        const runtimeRenderer = this.e.runtime?.puppeteer;
-        const renderer = runtimeRenderer?.noscript_renderers?.[0] ?? runtimeRenderer;
         let session;
         try {
             session = await startLogin(userId);
             const { signal } = session.state;
             let image = session.image;
-            if (/^\d+$/.test(qq) && renderer?.render) {
+            if (/^\d+$/.test(qq)) {
                 try {
                     const avatar = await fetch(`https://q.qlogo.cn/g?b=qq&s=0&nk=${qq}`, {
                         signal: AbortSignal.any([signal, AbortSignal.timeout(3000)]),
                     });
                     const contentType = avatar.headers.get('content-type')?.split(';', 1)[0]?.trim();
                     if (avatar.ok && contentType && /^image\/(jpeg|png|webp|gif)$/.test(contentType)) {
-                        const avatarData = Buffer.from(await avatar.arrayBuffer()).toString('base64');
+                        const avatarData = Buffer.from(await avatar.arrayBuffer());
+                        const { default: sharp } = await import('sharp');
                         signal.throwIfAborted();
-                        const rendered = await renderer.render('mhy-plugin/qr-login', {
-                            html: `<!doctype html>
-<style>
-  body { margin: 0; }
-  #container { position: relative; width: ${QR_IMAGE_SIZE}px; height: ${QR_IMAGE_SIZE}px; }
-  .qr { display: block; width: 100%; height: 100%; }
-  .avatar {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 36px; height: 36px; object-fit: cover;
-    border: 2px solid white; border-radius: 50%; background: white;
-  }
-</style>
-<div id="container">
-  <img class="qr" src="data:image/png;base64,${image.toString('base64')}" alt="">
-  <img class="avatar" src="data:${contentType};base64,${avatarData}" alt="">
-</div>`,
-                            imgType: 'png',
-                            viewport: { width: QR_IMAGE_SIZE, height: QR_IMAGE_SIZE, deviceScaleFactor: 1 },
-                            pageGotoParams: { waitUntil: 'load', timeout: 5000 },
-                        });
-                        if (rendered instanceof Uint8Array && rendered.length)
-                            image = Buffer.from(rendered);
+                        const resizedAvatar = await sharp(avatarData)
+                            .autoOrient()
+                            .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: 'inside' })
+                            .extend({
+                            top: AVATAR_BORDER,
+                            bottom: AVATAR_BORDER,
+                            left: AVATAR_BORDER,
+                            right: AVATAR_BORDER,
+                            background: '#fff',
+                        })
+                            .png()
+                            .toBuffer();
+                        image = await sharp(image)
+                            .composite([{ input: resizedAvatar, gravity: 'centre' }])
+                            .toBuffer();
                     }
                 }
                 catch {
