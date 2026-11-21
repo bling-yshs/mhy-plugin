@@ -1,4 +1,10 @@
-import { cancelLogin, QR_IMAGE_SIZE, startLogin, waitForLogin } from '../lib/mihoyo-qr-login.js'
+import {
+  cancelLogin,
+  QR_IMAGE_SIZE,
+  QrLoginCancelledError,
+  startLogin,
+  waitForLogin,
+} from '../lib/mihoyo-qr-login.js'
 
 export class MhyQrLogin extends plugin {
   /** 注册扫码命令。
@@ -84,6 +90,12 @@ export class MhyQrLogin extends plugin {
         `米游社账号 ${result.accountId} 绑定成功，共同步 ${result.roles.length} 个游戏角色`,
       )
     } catch (error) {
+      if (
+        error instanceof QrLoginCancelledError ||
+        session?.controller.signal.reason instanceof QrLoginCancelledError
+      ) {
+        return true
+      }
       session?.controller.abort()
       await this.reply(error instanceof Error ? error.message : '扫码登录失败，请重试')
     }

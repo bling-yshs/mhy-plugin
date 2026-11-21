@@ -7,7 +7,7 @@ import fetch from './fetch.js'
 import { getAccounts, saveLogin } from './accounts.js'
 import { getLTokenBySToken } from './stoken.js'
 
-export const QR_IMAGE_SIZE = 300
+export const QR_IMAGE_SIZE = 400
 
 const QR_APP_ID = 'bll8iq97cem8'
 const APP_VERSION = '2.71.1'
@@ -319,13 +319,15 @@ export type LoginSession = {
 }
 const sessions = new Map<string, LoginSession>()
 
+export class QrLoginCancelledError extends Error {}
+
 /** 取消用户正在进行的扫码。
  * @param userId 用户 ID
  * @returns 是否存在会话
  */
 export function cancelLogin(userId: string): boolean {
   const previous = sessions.get(String(userId))
-  previous?.controller.abort(new Error('扫码已取消或重新发起'))
+  previous?.controller.abort(new QrLoginCancelledError('扫码已取消或重新发起'))
   sessions.delete(String(userId))
   return !!previous
 }
@@ -354,13 +356,15 @@ export async function startLogin(userId: string): Promise<LoginSession> {
     signal.throwIfAborted()
     session.qr = await createQrLogin(session.state)
     session.image = await QRCode.toBuffer(session.qr.url, {
-      width: QR_IMAGE_SIZE,
+      // qrcode 会在缩放后向下取整，预留半像素可避免浮点误差导致尺寸少 1 像素。
+      width: QR_IMAGE_SIZE + 0.5,
       margin: 4,
       errorCorrectionLevel: 'H',
     })
     signal.throwIfAborted()
     return session
   } catch (error) {
+    controller.signal.throwIfAborted()
     controller.abort()
     throw error
   }
