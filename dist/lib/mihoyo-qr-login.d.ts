@@ -1,5 +1,5 @@
 import type { GameRole } from '../types/api.js';
-export declare const QR_IMAGE_SIZE = 300;
+export declare const QR_IMAGE_SIZE = 400;
 type QrCreateData = {
     url: string;
     ticket: string;
@@ -21,6 +21,8 @@ export type LoginSession = {
         roles: GameRole[];
     }>;
 };
+export declare class QrLoginCancelledError extends Error {
+}
 /** 取消用户正在进行的扫码。
  * @param userId 用户 ID
  * @returns 是否存在会话
