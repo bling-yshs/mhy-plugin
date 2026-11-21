@@ -1,4 +1,5 @@
 import type { GameRole } from '../types/api.js';
+export declare const QR_IMAGE_SIZE = 300;
 type QrCreateData = {
     url: string;
     ticket: string;
@@ -25,7 +26,7 @@ export type LoginSession = {
  * @returns 是否存在会话
  */
 export declare function cancelLogin(userId: string): boolean;
-/** 创建扫码会话和二维码图片。
+/** 创建扫码会话并生成高容错的登录二维码。
  * @param userId 发起用户 ID
  * @returns 独立扫码会话
  */

@@ -7,7 +7,7 @@ export declare class MhyQrLogin extends plugin {
      * @returns 是否处理
      */
     cancel(): Promise<boolean>;
-    /** 发送二维码并保存扫码结果。
+    /** 发送带触发者 QQ 头像的二维码并保存扫码结果。
      * @returns 是否处理
      */
     qrLogin(): Promise<boolean>;

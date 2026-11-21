@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import fetch from './fetch.js';
 import { getAccounts, saveLogin } from './accounts.js';
 import { getLTokenBySToken } from './stoken.js';
+export const QR_IMAGE_SIZE = 300;
 const QR_APP_ID = 'bll8iq97cem8';
 const APP_VERSION = '2.71.1';
 const PASS_SALT = 'JwYDpKvLj6MrMqqYU6jTKF17KNO2PXoS';
@@ -222,7 +223,7 @@ export function cancelLogin(userId) {
     sessions.delete(String(userId));
     return !!previous;
 }
-/** 创建扫码会话和二维码图片。
+/** 创建扫码会话并生成高容错的登录二维码。
  * @param userId 发起用户 ID
  * @returns 独立扫码会话
  */
@@ -244,9 +245,9 @@ export async function startLogin(userId) {
         signal.throwIfAborted();
         session.qr = await createQrLogin(session.state);
         session.image = await QRCode.toBuffer(session.qr.url, {
-            width: 512,
-            margin: 2,
-            errorCorrectionLevel: 'M',
+            width: QR_IMAGE_SIZE,
+            margin: 4,
+            errorCorrectionLevel: 'H',
         });
         signal.throwIfAborted();
         return session;
