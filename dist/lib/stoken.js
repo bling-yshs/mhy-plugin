@@ -26,7 +26,7 @@ async function requestToken(url, init, label) {
         throw new Error(`${label}失败：返回码 ${payload.retcode}，请尝试重新扫码登录`);
     return payload.data;
 }
-/** 使用 SToken 兑换独立的 LToken。
+/** 使用 Cookie 和 URL 查询参数传递凭据，兑换独立的 LToken。
  * @param accountId 米游社账号 ID
  * @param stoken 扫码取得的 SToken
  * @param mid 米游社 MID
@@ -35,7 +35,10 @@ async function requestToken(url, init, label) {
  */
 export async function getLTokenBySToken(accountId, stoken, mid, signal) {
     const cookie = `stuid=${accountId};stoken=${stoken};${mid ? `mid=${mid};` : ''}`;
-    const data = await requestToken('https://passport-api.mihoyo.com/account/auth/api/getLTokenBySToken', { headers: { Cookie: cookie, 'User-Agent': 'Mozilla/5.0 miHoYoBBS/2.71.1' }, signal }, '获取 ltoken');
+    const query = new URLSearchParams({ stuid: accountId, stoken });
+    if (mid)
+        query.set('mid', mid);
+    const data = await requestToken(`https://passport-api.mihoyo.com/account/auth/api/getLTokenBySToken?${query}`, { headers: { Cookie: cookie, 'User-Agent': 'Mozilla/5.0 miHoYoBBS/2.71.1' }, signal }, '获取 ltoken');
     if (!data.ltoken || data.ltoken === stoken || /^v2_/i.test(data.ltoken))
         throw new Error('获取 ltoken 失败：响应缺少有效的 LToken，请重新扫码登录');
     return data.ltoken;

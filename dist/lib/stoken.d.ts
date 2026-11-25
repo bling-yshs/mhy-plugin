@@ -1,4 +1,4 @@
-/** 使用 SToken 兑换独立的 LToken。
+/** 使用 Cookie 和 URL 查询参数传递凭据，兑换独立的 LToken。
  * @param accountId 米游社账号 ID
  * @param stoken 扫码取得的 SToken
  * @param mid 米游社 MID
