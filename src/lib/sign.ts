@@ -1,5 +1,8 @@
 import { createHash, randomInt } from 'node:crypto'
 
+/** 米游社 App 通行证接口的 DS2 盐。 */
+export const PASSPORT_SALT = 'JwYDpKvLj6MrMqqYU6jTKF17KNO2PXoS'
+
 /** 生成公共 DS1 签名，默认使用游戏签到的盐。
  * @param salt 对应端点的盐
  * @returns DS 请求头

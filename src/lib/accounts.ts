@@ -71,7 +71,7 @@ export async function saveLogin(
   login: {
     accountId: string
     mid: string
-    stoken?: string
+    stoken: string
     cookie: string
     device: LoginDevice
     roles: GameRole[]
@@ -93,7 +93,7 @@ export async function saveLogin(
     }
     account.set({
       mid: login.mid,
-      ...(login.stoken ? { stoken: login.stoken } : {}),
+      stoken: login.stoken,
       ck: login.cookie,
       type: 'mys',
       device: account.device || login.device.device_id,
