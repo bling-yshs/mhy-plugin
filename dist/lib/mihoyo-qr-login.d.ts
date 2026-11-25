@@ -9,8 +9,6 @@ type LoginState = {
     device_id: string;
     device_name: string;
     device_model: string;
-    lifecycleId: string;
-    cookies: Map<string, string>;
 };
 export type LoginSession = {
     userId: string;
@@ -30,12 +28,12 @@ export declare class QrLoginCancelledError extends Error {
  * @returns 是否存在会话
  */
 export declare function cancelLogin(userId: string): boolean;
-/** 创建扫码会话，复用已保存的设备信息并生成登录二维码。
+/** 创建扫码会话并生成高容错的登录二维码。
  * @param userId 发起用户 ID
  * @returns 独立扫码会话
  */
 export declare function startLogin(userId: string): Promise<LoginSession>;
-/** 等待网页扫码确认并原子保存凭据与三游戏绑定。
+/** 等待扫码确认，兑换凭据并原子保存三游戏绑定。
  * @param session 扫码会话
  * @param onStatus 状态变化提示
  * @returns 已保存账号及角色
