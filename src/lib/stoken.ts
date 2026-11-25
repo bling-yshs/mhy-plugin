@@ -32,7 +32,7 @@ async function requestToken(url: string, init: RequestInit, label: string): Prom
   return payload.data
 }
 
-/** 使用 SToken 兑换独立的 LToken。
+/** 使用 Cookie 和 URL 查询参数传递凭据，兑换独立的 LToken。
  * @param accountId 米游社账号 ID
  * @param stoken 扫码取得的 SToken
  * @param mid 米游社 MID
@@ -46,8 +46,10 @@ export async function getLTokenBySToken(
   signal?: AbortSignal,
 ): Promise<string> {
   const cookie = `stuid=${accountId};stoken=${stoken};${mid ? `mid=${mid};` : ''}`
+  const query = new URLSearchParams({ stuid: accountId, stoken })
+  if (mid) query.set('mid', mid)
   const data = await requestToken(
-    'https://passport-api.mihoyo.com/account/auth/api/getLTokenBySToken',
+    `https://passport-api.mihoyo.com/account/auth/api/getLTokenBySToken?${query}`,
     { headers: { Cookie: cookie, 'User-Agent': 'Mozilla/5.0 miHoYoBBS/2.71.1' }, signal },
     '获取 ltoken',
   )
