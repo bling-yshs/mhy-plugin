@@ -13,6 +13,9 @@ const PASSPORT_SDK_VERSION = '2.44.0';
 const DEVICE_FP = '38d7ee0e96649';
 /** exchange 的 dst_token_type：2 为 ltoken_v2，4 为 cookie_token_v2。 */
 const TOKEN_TYPE = { ltoken: 2, cookieToken: 4 };
+/** 通行证 SDK 序列化时转义的字符。U+2028/U+2029 和反斜杠用码点构造，源码中不出现转义序列。 */
+const PASSPORT_ESCAPE = new RegExp(`[<>&='${String.fromCharCode(0x2028, 0x2029)}]`, 'gu');
+const BACKSLASH = String.fromCharCode(92);
 const refreshing = new Set();
 /** 请求凭据接口并校验 HTTP、业务状态及响应数据。
  * @param url 米游社接口地址
@@ -60,12 +63,25 @@ function parseDevice(raw) {
     catch { }
     return undefined;
 }
+/** 从 Cookie 字符串中读取指定字段。
+ * @param cookie Cookie 字符串
+ * @param key 字段名
+ * @returns 字段值，不存在时为 undefined
+ */
+function cookieValue(cookie, key) {
+    for (const part of cookie.split(';')) {
+        const separator = part.indexOf('=');
+        if (separator > 0 && part.slice(0, separator).trim() === key)
+            return part.slice(separator + 1).trim() || undefined;
+    }
+    return undefined;
+}
 /** 按通行证 SDK 的方式转义正文，签名和发送共用同一份字符串。
  * @param data 请求对象
  * @returns JSON 正文
  */
 function passportBody(data) {
-    return JSON.stringify(data).replace(/[<>&='  ]/gu, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    return JSON.stringify(data).replace(PASSPORT_ESCAPE, (char) => `${BACKSLASH}u${char.charCodeAt(0).toString(16).padStart(4, '0')}`);
 }
 /** 用 SToken V2 通过通行证 exchange 兑换指定类型的 V2 凭据。
  * @param login 账号 ID、SToken 和 MID
@@ -176,7 +192,7 @@ export async function refreshUserCookies(userId) {
                 accountId,
                 stoken: account.stoken,
                 mid: account.mid,
-                ltoken: /(?:^|;\s*)ltoken=([^;]+)/.exec(account.ck || '')?.[1],
+                ltoken: cookieValue(account.ck || '', 'ltoken'),
             }, parseDevice(account.login_device));
             await writeTransaction(async (transaction) => {
                 const current = await MysUserDB.findByPk(accountId, { transaction });

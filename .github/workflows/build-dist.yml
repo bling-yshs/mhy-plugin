@@ -80,10 +80,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Merge built dev commit
+      - name: 同步 dev 源码 (Sync Dev Source)
         run: |
           git fetch origin "$GITHUB_SHA"
-          git merge --no-ff --no-commit "$GITHUB_SHA"
+          # 只记录合并关系，源码直接取 dev 这次提交的内容；dev 改写历史也不会冲突
+          git merge --no-ff --no-commit -s ours "$GITHUB_SHA"
+          git read-tree -u --reset "$GITHUB_SHA"
 
       - name: Clear existing dist
         run: rm -rf dist
