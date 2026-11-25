@@ -69,7 +69,7 @@ export async function refreshUserCookies(userId: string): Promise<string[]> {
   for (const account of accounts) {
     const accountId = String(account.ltuid)
     if (!account.stoken) {
-      results.push(`账号 ${accountId}：缺少 stoken，请重新扫码登录`)
+      results.push(`账号 ${accountId}：请发送 #扫码登录 重新获取网页 CK`)
       continue
     }
     if (refreshing.has(accountId)) {
@@ -127,7 +127,8 @@ export async function refreshUserCookies(userId: string): Promise<string[]> {
 export async function getGachaImportUrl(userId: string): Promise<{ uid: string; url: string }> {
   const user = await UserDB.findByPk(userId)
   const account = await resolveAccount(userId, 'gs')
-  if (!account?.stoken) throw new Error('当前原神账号缺少 stoken，请先发送 #扫码登录')
+  if (!account) throw new Error('请先发送 #扫码登录 绑定原神账号')
+  if (!account.stoken) throw new Error('获取抽卡链接需要 SToken，网页扫码仅提供登录 Cookie')
   const selectedUid = user?.games.gs?.uid
   const uid =
     (selectedUid && account.uids.gs?.includes(selectedUid) ? selectedUid : account.uids.gs?.[0]) ||
