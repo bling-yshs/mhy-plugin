@@ -1,21 +1,47 @@
 import type { GameRole } from '../types/api.js'
 import { randomBytes } from 'node:crypto'
+import { PASSPORT_SALT, createDs } from './sign.js'
 import { setTimeout as sleep } from 'node:timers/promises'
 import QRCode from 'qrcode'
 import fetch from './fetch.js'
 import { getAccounts, saveLogin } from './accounts.js'
+import { exchangeCookieBySToken } from './stoken.js'
 
 export const QR_IMAGE_SIZE = 500
 
-const PASSPORT = 'https://passport-api.mihoyo.com'
-const WEB_QR = PASSPORT + '/account/ma-cn-passport/web'
-const QR_APP_ID = 'cie2gjc0sg00'
-const WEB_REFERRER = 'https://user.mihoyo.com/login-platform/index.html?app_id=' + QR_APP_ID +
-  '&theme=ys&token_type=2&game_biz=hk4e_cn&message_origin=https%253A%252F%252Fact.mihoyo.com' +
-  '&succ_back_type=message%253Alogin-platform%253Alogin-success&fail_back_type=message%253Alogin-platform%253Alogin-fail&ux_mode=popup&iframe_level=1#/login/qr'
-const WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36'
+const QR_APP_ID = 'bll8iq97cem8'
+const APP_VERSION = '2.71.1'
+const DS2_SALT_4X = 'xV8v4Qu54lUKrEYFZkJhB8cuOh9Asafs'
 const POLL_INTERVAL_MS = 2_000
-const ACCOUNT_COOKIES = ['ltoken_v2', 'ltuid_v2', 'ltmid_v2', 'cookie_token_v2', 'account_id_v2', 'account_mid_v2', 'account_id', 'ltuid']
+
+const CREATE_QR_URL = 'https://passport-api.mihoyo.com/account/ma-cn-passport/app/createQRLogin'
+const QUERY_QR_URL = 'https://passport-api.mihoyo.com/account/ma-cn-passport/app/queryQRLoginStatus'
+const GAME_ROLES_URL = 'https://api-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie'
+
+/** 将 Demo 请求转换为统一 fetch，保持原始响应。
+ * @param url 请求地址
+ * @param options 请求参数
+ * @returns JSON 响应
+ */
+async function httpJson<T>(
+  url: string,
+  options: {
+    key: string
+    signal: AbortSignal
+    method?: string
+    headers?: Record<string, string>
+    body?: string
+  },
+): Promise<{ body: T }> {
+  const response = await fetch(url, {
+    method: options.method,
+    headers: options.headers,
+    body: options.body,
+    signal: AbortSignal.any([options.signal, AbortSignal.timeout(10000)]),
+  })
+  if (!response.ok) throw new Error(`米游社请求失败：HTTP ${response.status}`)
+  return { body: (await response.json()) as T }
+}
 
 type ApiResponse<T> = {
   retcode: number
@@ -30,9 +56,26 @@ type QrCreateData = {
 
 type QrStatus = 'Created' | 'Scanned' | 'Confirmed'
 
+type QrToken = {
+  name?: string
+  token?: string
+  token_type?: number
+  [key: string]: unknown
+}
+
+type QrUserInfo = {
+  aid?: string
+  uid?: string
+  account_id?: string
+  mid?: string
+  [key: string]: unknown
+}
+
 type QrStatusData = {
   status: QrStatus
-  user_info?: { aid?: string; mid?: string } | null
+  tokens?: QrToken[]
+  user_info?: QrUserInfo | null
+  [key: string]: unknown
 }
 
 type LoginState = {
@@ -40,13 +83,11 @@ type LoginState = {
   device_id: string
   device_name: string
   device_model: string
-  lifecycleId: string
-  cookies: Map<string, string>
 }
 
-/** 创建网页扫码会话，使用原有的设备标识生成规则。
- * @param signal 会话取消信号
- * @returns 网页设备信息与会话 Cookie
+/** 创建首次扫码所需的稳定设备身份。
+ * @param signal 请求参数
+ * @returns 操作结果
  */
 function createState(signal: AbortSignal): LoginState {
   const deviceId = randomBytes(16).toString('hex').toUpperCase()
@@ -55,8 +96,6 @@ function createState(signal: AbortSignal): LoginState {
     device_id: deviceId,
     device_name: `Android-${deviceId.slice(0, 8)}`,
     device_model: deviceId.slice(0, 16),
-    lifecycleId: randomBytes(5).toString('hex'),
-    cookies: new Map(),
   }
 }
 
@@ -71,54 +110,79 @@ function assertApiSuccess<T>(payload: ApiResponse<T>, apiName: string) {
   }
 }
 
-/**
- * 发送网页扫码请求，并保留通行证在创建和轮询过程中下发的 Cookie。
- * @param state 扫码会话
- * @param action 网页通行证操作
- * @param body 请求正文
- * @returns 通行证业务响应
+/** 构造已验证的米游社 App 请求头。
+ * @param state 请求参数
+ * @param body 请求参数
+ * @returns 操作结果
  */
-async function postPassport<T>(state: LoginState, action: string, body: object): Promise<ApiResponse<T>> {
-  const response = await fetch(`${WEB_QR}/${action}`, {
-    method: 'POST',
-    signal: AbortSignal.any([state.signal, AbortSignal.timeout(10000)]),
-    headers: {
-      Origin: 'https://user.mihoyo.com',
-      Referer: 'https://user.mihoyo.com/',
-      'Content-Type': 'application/json',
-      'User-Agent': WEB_UA,
-      'x-rpc-app_id': QR_APP_ID,
-      'x-rpc-client_type': '4',
-      'x-rpc-game_biz': 'hk4e_cn',
-      'x-rpc-sdk_version': '2.57.0',
-      'x-rpc-device_id': state.device_id,
-      'x-rpc-device_name': state.device_name,
-      'x-rpc-device_model': encodeURIComponent(state.device_model),
-      'x-rpc-device_os': 'Windows%2010%2064-bit',
-      'x-rpc-lifecycle_id': state.lifecycleId,
-      'x-rpc-mi_referrer': WEB_REFERRER,
-      Cookie: Array.from(state.cookies, ([key, value]) => `${key}=${value}`).join('; '),
-    },
-    body: JSON.stringify(body),
-  })
-  if (!response.ok) throw new Error(`米游社扫码请求失败：HTTP ${response.status}`)
-  for (const header of response.headers.getSetCookie()) {
-    const pair = header.split(';', 1)[0]
-    const separator = pair.indexOf('=')
-    if (separator < 1) continue
-    const key = pair.slice(0, separator)
-    const value = pair.slice(separator + 1)
-    if (value) state.cookies.set(key, value)
-    else state.cookies.delete(key)
+function getPassportHeaders(state: LoginState, body: string): Record<string, string> {
+  return {
+    'x-rpc-device_id': state.device_id,
+    'x-rpc-app_id': QR_APP_ID,
+    'x-rpc-device_name': state.device_name,
+    'x-rpc-device_fp': '38d7ee0e96649',
+    'x-rpc-device_model': state.device_model,
+    'x-rpc-app_version': APP_VERSION,
+    'x-rpc-game_biz': 'bbs_cn',
+    'x-rpc-sys_version': '11',
+    'x-rpc-aigis': '',
+    'Content-Type': 'application/json',
+    'x-rpc-client_type': '2',
+    DS: createDs('', body, PASSPORT_SALT),
+    'x-rpc-sdk_version': '1.3.1.2',
+    'User-Agent': 'okhttp/4.8.0',
+    Connection: 'Keep-Alive',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'x-rpc-channel': 'appstore',
   }
-  return (await response.json()) as ApiResponse<T>
 }
 
-/** 等待手机确认，读取网页版登录 Cookie。
- * @param state 扫码会话
- * @param ticket 二维码票据
- * @param onStatus 状态变化回调
- * @returns 米游社账号、MID 和 V2 Cookie
+/** 使用最终请求体签名并发送 Passport 请求。
+ * @param state 登录设备和取消信号
+ * @param key 日志操作名
+ * @param url 请求地址
+ * @param body 请求对象
+ * @returns 原始响应
+ */
+async function postPassport<T>(state: LoginState, key: string, url: string, body: object) {
+  const bodyText = JSON.stringify(body)
+  const result = await httpJson<ApiResponse<T>>(url, {
+    signal: state.signal,
+    key,
+    method: 'POST',
+    headers: getPassportHeaders(state, bodyText),
+    body: bodyText,
+  })
+  return result.body
+}
+
+/** 创建 App 登录二维码。
+ * @param state 请求参数
+ * @returns 操作结果
+ */
+async function createQrLogin(state: LoginState) {
+  const payload = await postPassport<QrCreateData>(state, 'app_create_qr_login', CREATE_QR_URL, {})
+  assertApiSuccess(payload, '创建 App 扫码二维码')
+  if (!payload.data?.ticket || !payload.data?.url) {
+    throw new Error('创建二维码成功响应中缺少 ticket 或 url')
+  }
+  return payload.data
+}
+
+/** 查询二维码状态。
+ * @param state 请求参数
+ * @param ticket 请求参数
+ * @returns 操作结果
+ */
+async function queryQrLoginStatus(state: LoginState, ticket: string) {
+  return postPassport<QrStatusData>(state, 'app_query_qr_login_status', QUERY_QR_URL, { ticket })
+}
+
+/** 等待确认并提取已验证的 SToken 响应字段。
+ * @param state 请求参数
+ * @param ticket 请求参数
+ * @param onStatus 请求参数
+ * @returns 操作结果
  */
 async function waitForQrConfirmed(
   state: LoginState,
@@ -128,7 +192,7 @@ async function waitForQrConfirmed(
   let previousStatus: QrStatus | undefined
 
   while (true) {
-    const payload = await postPassport<QrStatusData>(state, 'queryQRLoginStatus', { ticket })
+    const payload = await queryQrLoginStatus(state, ticket)
 
     if (payload.retcode === -3501) {
       throw new Error('二维码已经过期，请重新扫码')
@@ -136,7 +200,7 @@ async function waitForQrConfirmed(
     if (payload.retcode === -3505) {
       throw new Error('你在手机上取消了扫码登录')
     }
-    assertApiSuccess(payload, '查询网页扫码状态')
+    assertApiSuccess(payload, '查询 App 扫码状态')
 
     if (payload.data.status !== previousStatus) {
       previousStatus = payload.data.status
@@ -144,39 +208,58 @@ async function waitForQrConfirmed(
     }
 
     if (payload.data.status === 'Confirmed') {
-      const accountId = String(payload.data.user_info?.aid || '')
-      const mid = payload.data.user_info?.mid
-      const cookies = state.cookies
-      if (!accountId || !mid || !cookies.get('ltoken_v2') || !cookies.get('cookie_token_v2'))
-        throw new Error('扫码已确认，响应缺少账号信息或 V2 登录凭据')
-      if (cookies.get('ltuid_v2') !== accountId || cookies.get('account_id_v2') !== accountId ||
-          cookies.get('ltmid_v2') !== mid || cookies.get('account_mid_v2') !== mid)
-        throw new Error('扫码响应中的 Cookie 与账号信息不一致')
-      const cookie = ACCOUNT_COOKIES.filter(key => cookies.has(key))
-        .map(key => `${key}=${cookies.get(key)}`).join('; ')
-      return { accountId, mid, cookie }
+      const userInfo = payload.data.user_info
+      const accountId = String(userInfo?.aid || userInfo?.uid || userInfo?.account_id || '')
+      const mid = userInfo?.mid
+      const tokenInfo =
+        payload.data.tokens?.find((item) => item.name === 'stoken' || item.name === 'stoken_v2') ??
+        payload.data.tokens?.[0]
+      const stoken = tokenInfo?.token
+
+      if (!accountId || !mid || !stoken) {
+        throw new Error(
+          `扫码已确认，但没有拿到完整 SToken 信息: accountId=${accountId ?? '-'}, mid=${mid ?? '-'}, tokens=${payload.data.tokens?.length ?? 0}`,
+        )
+      }
+
+      return { accountId, mid, stoken }
     }
 
     await sleep(POLL_INTERVAL_MS, undefined, { signal: state.signal })
   }
 }
 
-/**
- * 使用网页 LToken 查询指定游戏的绑定角色。
- * @param state 扫码会话
- * @param cookie 网页登录 Cookie
+/** 按游戏查询绑定角色，保持 Demo 的请求结构。
+ * @param state 登录会话
+ * @param cookie 已兑换的完整 CK
  * @param gameBiz 游戏业务标识
- * @returns 账号的游戏角色列表
+ * @returns 角色列表
  */
-async function getGenshinRoles(state: LoginState, cookie: string, gameBiz: string) {
-  const url = `${PASSPORT}/binding/api/getUserGameRolesByLtoken?game_biz=${gameBiz}`
-  const response = await fetch(url, {
-    signal: AbortSignal.any([state.signal, AbortSignal.timeout(10000)]),
-    headers: { Cookie: cookie, Origin: 'https://act.mihoyo.com', Referer: 'https://act.mihoyo.com/', 'x-rpc-language': 'zh-cn' },
+async function getGenshinRoles(
+  state: LoginState,
+  cookie: string,
+  gameBiz: string,
+) {
+  const query = `game_biz=${gameBiz}`
+  const url = `${GAME_ROLES_URL}?${query}`
+  const result = await httpJson<ApiResponse<{ list: GameRole[] }>>(url, {
+    signal: state.signal,
+    key: 'app_get_genshin_roles',
+    headers: {
+      Accept: 'application/json, text/plain, */*',
+      Cookie: cookie,
+      DS: createDs(query, '', DS2_SALT_4X),
+      'User-Agent':
+        `Mozilla/5.0 (Linux; Android 16; wv) AppleWebKit/537.36 ` +
+        `Mobile Safari/537.36 miHoYoBBS/${APP_VERSION}`,
+      'x-rpc-app_version': APP_VERSION,
+      'x-rpc-client_type': '5',
+      'x-rpc-device_id': state.device_id,
+    },
   })
-  if (!response.ok) throw new Error(`查询绑定角色失败：HTTP ${response.status}`)
-  const payload = (await response.json()) as ApiResponse<{ list: GameRole[] }>
-  assertApiSuccess(payload, '查询绑定角色')
+  const payload = result.body
+  assertApiSuccess(payload, '获取绑定原神账号')
+
   if (!Array.isArray(payload.data?.list)) throw new Error('角色查询响应缺少 list')
 
   return payload.data.list
@@ -205,7 +288,7 @@ export function cancelLogin(userId: string): boolean {
   return !!previous
 }
 
-/** 创建扫码会话，复用已保存的设备信息并生成登录二维码。
+/** 创建扫码会话并生成高容错的登录二维码。
  * @param userId 发起用户 ID
  * @returns 独立扫码会话
  */
@@ -225,21 +308,12 @@ export async function startLogin(userId: string): Promise<LoginSession> {
   )
   try {
     const account = (await getAccounts(userId)).find((item) => item.login_device)
-    if (account?.login_device) {
-      const device = JSON.parse(account.login_device)
-      session.state.device_id = device.device_id ?? session.state.device_id
-      session.state.device_name = device.device_name ?? session.state.device_name
-      session.state.device_model = device.device_model ?? session.state.device_model
-    }
-    session.state.cookies.set('_MHYUUID', session.state.device_id)
-    session.state.cookies.set('MIHOYO_LOGIN_PLATFORM_LIFECYCLE_ID', session.state.lifecycleId)
+    if (account?.login_device) Object.assign(session.state, JSON.parse(account.login_device))
     signal.throwIfAborted()
-    const qr = await postPassport<QrCreateData>(session.state, 'createQRLogin', {})
-    assertApiSuccess(qr, '创建网页扫码二维码')
-    if (!qr.data?.ticket || !qr.data.url) throw new Error('创建二维码响应缺少 ticket 或 url')
-    session.qr = qr.data
+    session.qr = await createQrLogin(session.state)
     session.image = await QRCode.toBuffer(session.qr.url, {
       width: QR_IMAGE_SIZE,
+      version: 11,
       margin: 2,
       errorCorrectionLevel: 'H',
     })
@@ -252,7 +326,7 @@ export async function startLogin(userId: string): Promise<LoginSession> {
   }
 }
 
-/** 等待网页扫码确认并原子保存凭据与三游戏绑定。
+/** 等待扫码确认，兑换凭据并原子保存三游戏绑定。
  * @param session 扫码会话
  * @param onStatus 状态变化提示
  * @returns 已保存账号及角色
@@ -267,13 +341,15 @@ export async function waitForLogin(
       if (!session.qr) throw new Error('二维码尚未就绪')
       const state = session.state
       const login = await waitForQrConfirmed(state, session.qr.ticket, onStatus)
+      const cookie = await exchangeCookieBySToken(login, state, state.signal)
       const roles: GameRole[] = []
       for (const biz of ['hk4e_cn', 'hkrpg_cn', 'nap_cn'])
-        roles.push(...(await getGenshinRoles(state, login.cookie, biz)))
+        roles.push(...(await getGenshinRoles(state, cookie, biz)))
       await saveLogin(
         session.userId,
         {
           ...login,
+          cookie,
           roles,
           device: {
             device_id: state.device_id,
