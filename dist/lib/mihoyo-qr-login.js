@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import QRCode from 'qrcode';
 import fetch from './fetch.js';
@@ -13,16 +13,17 @@ const WEB_REFERRER = 'https://user.mihoyo.com/login-platform/index.html?app_id='
 const WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36';
 const POLL_INTERVAL_MS = 2_000;
 const ACCOUNT_COOKIES = ['ltoken_v2', 'ltuid_v2', 'ltmid_v2', 'cookie_token_v2', 'account_id_v2', 'account_mid_v2', 'account_id', 'ltuid'];
-/** 创建独立的网页扫码会话。
+/** 创建网页扫码会话，使用原有的设备标识生成规则。
  * @param signal 会话取消信号
  * @returns 网页设备信息与会话 Cookie
  */
 function createState(signal) {
+    const deviceId = randomBytes(16).toString('hex').toUpperCase();
     return {
         signal,
-        device_id: randomUUID(),
-        device_name: 'Chrome',
-        device_model: 'Chrome 156.0.0.0',
+        device_id: deviceId,
+        device_name: `Android-${deviceId.slice(0, 8)}`,
+        device_model: deviceId.slice(0, 16),
         lifecycleId: randomBytes(5).toString('hex'),
         cookies: new Map(),
     };
@@ -154,7 +155,7 @@ export function cancelLogin(userId) {
     sessions.delete(String(userId));
     return !!previous;
 }
-/** 创建扫码会话并生成高容错的登录二维码。
+/** 创建扫码会话，复用已保存的设备信息并生成登录二维码。
  * @param userId 发起用户 ID
  * @returns 独立扫码会话
  */
@@ -173,8 +174,9 @@ export async function startLogin(userId) {
         const account = (await getAccounts(userId)).find((item) => item.login_device);
         if (account?.login_device) {
             const device = JSON.parse(account.login_device);
-            if (device.device_name === 'Chrome' && device.device_id)
-                session.state.device_id = device.device_id;
+            session.state.device_id = device.device_id ?? session.state.device_id;
+            session.state.device_name = device.device_name ?? session.state.device_name;
+            session.state.device_model = device.device_model ?? session.state.device_model;
         }
         session.state.cookies.set('_MHYUUID', session.state.device_id);
         session.state.cookies.set('MIHOYO_LOGIN_PLATFORM_LIFECYCLE_ID', session.state.lifecycleId);

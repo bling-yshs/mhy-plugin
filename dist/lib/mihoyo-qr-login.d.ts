@@ -30,7 +30,7 @@ export declare class QrLoginCancelledError extends Error {
  * @returns 是否存在会话
  */
 export declare function cancelLogin(userId: string): boolean;
-/** 创建扫码会话并生成高容错的登录二维码。
+/** 创建扫码会话，复用已保存的设备信息并生成登录二维码。
  * @param userId 发起用户 ID
  * @returns 独立扫码会话
  */
