@@ -9,6 +9,8 @@ type LoginState = {
     device_id: string;
     device_name: string;
     device_model: string;
+    lifecycleId: string;
+    cookies: Map<string, string>;
 };
 export type LoginSession = {
     userId: string;
@@ -33,7 +35,7 @@ export declare function cancelLogin(userId: string): boolean;
  * @returns 独立扫码会话
  */
 export declare function startLogin(userId: string): Promise<LoginSession>;
-/** 等待扫码确认，兑换凭据并原子保存三游戏绑定。
+/** 等待网页扫码确认并原子保存凭据与三游戏绑定。
  * @param session 扫码会话
  * @param onStatus 状态变化提示
  * @returns 已保存账号及角色

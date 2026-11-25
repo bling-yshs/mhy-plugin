@@ -36,7 +36,7 @@ export declare function accountUsers(accountId: string): Promise<string[]>;
 export declare function saveLogin(userId: string, login: {
     accountId: string;
     mid: string;
-    stoken: string;
+    stoken?: string;
     cookie: string;
     device: LoginDevice;
     roles: GameRole[];

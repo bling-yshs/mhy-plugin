@@ -69,7 +69,7 @@ export async function saveLogin(userId, login, signal) {
         }
         account.set({
             mid: login.mid,
-            stoken: login.stoken,
+            ...(login.stoken ? { stoken: login.stoken } : {}),
             ck: login.cookie,
             type: 'mys',
             device: account.device || login.device.device_id,

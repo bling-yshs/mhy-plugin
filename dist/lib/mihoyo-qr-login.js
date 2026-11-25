@@ -1,47 +1,30 @@
-import { randomBytes } from 'node:crypto';
-import { createDs } from './sign.js';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import QRCode from 'qrcode';
 import fetch from './fetch.js';
 import { getAccounts, saveLogin } from './accounts.js';
-import { getLTokenBySToken } from './stoken.js';
 export const QR_IMAGE_SIZE = 500;
-const QR_APP_ID = 'bll8iq97cem8';
-const APP_VERSION = '2.71.1';
-const PASS_SALT = 'JwYDpKvLj6MrMqqYU6jTKF17KNO2PXoS';
-const DS2_SALT_4X = 'xV8v4Qu54lUKrEYFZkJhB8cuOh9Asafs';
+const PASSPORT = 'https://passport-api.mihoyo.com';
+const WEB_QR = PASSPORT + '/account/ma-cn-passport/web';
+const QR_APP_ID = 'cie2gjc0sg00';
+const WEB_REFERRER = 'https://user.mihoyo.com/login-platform/index.html?app_id=' + QR_APP_ID +
+    '&theme=ys&token_type=2&game_biz=hk4e_cn&message_origin=https%253A%252F%252Fact.mihoyo.com' +
+    '&succ_back_type=message%253Alogin-platform%253Alogin-success&fail_back_type=message%253Alogin-platform%253Alogin-fail&ux_mode=popup&iframe_level=1#/login/qr';
+const WEB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36';
 const POLL_INTERVAL_MS = 2_000;
-const CREATE_QR_URL = 'https://passport-api.mihoyo.com/account/ma-cn-passport/app/createQRLogin';
-const QUERY_QR_URL = 'https://passport-api.mihoyo.com/account/ma-cn-passport/app/queryQRLoginStatus';
-const COOKIE_BY_STOKEN_URL = 'https://api-takumi.mihoyo.com/auth/api/getCookieAccountInfoBySToken';
-const GAME_ROLES_URL = 'https://api-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie';
-/** 将 Demo 请求转换为统一 fetch，保持原始响应。
- * @param url 请求地址
- * @param options 请求参数
- * @returns JSON 响应
- */
-async function httpJson(url, options) {
-    const response = await fetch(url, {
-        method: options.method,
-        headers: options.headers,
-        body: options.body,
-        signal: AbortSignal.any([options.signal, AbortSignal.timeout(10000)]),
-    });
-    if (!response.ok)
-        throw new Error(`米游社请求失败：HTTP ${response.status}`);
-    return { body: (await response.json()) };
-}
-/** 创建首次扫码所需的稳定设备身份。
- * @param signal 请求参数
- * @returns 操作结果
+const ACCOUNT_COOKIES = ['ltoken_v2', 'ltuid_v2', 'ltmid_v2', 'cookie_token_v2', 'account_id_v2', 'account_mid_v2', 'account_id', 'ltuid'];
+/** 创建独立的网页扫码会话。
+ * @param signal 会话取消信号
+ * @returns 网页设备信息与会话 Cookie
  */
 function createState(signal) {
-    const deviceId = randomBytes(16).toString('hex').toUpperCase();
     return {
         signal,
-        device_id: deviceId,
-        device_name: `Android-${deviceId.slice(0, 8)}`,
-        device_model: deviceId.slice(0, 16),
+        device_id: randomUUID(),
+        device_name: 'Chrome',
+        device_model: 'Chrome 156.0.0.0',
+        lifecycleId: randomBytes(5).toString('hex'),
+        cookies: new Map(),
     };
 }
 /** 校验业务响应码。
@@ -54,160 +37,106 @@ function assertApiSuccess(payload, apiName) {
         throw new Error(`${apiName}失败: retcode=${payload.retcode}, message=${payload.message}`);
     }
 }
-/** 构造已验证的米游社 App 请求头。
- * @param state 请求参数
- * @param body 请求参数
- * @returns 操作结果
+/**
+ * 发送网页扫码请求，并保留通行证在创建和轮询过程中下发的 Cookie。
+ * @param state 扫码会话
+ * @param action 网页通行证操作
+ * @param body 请求正文
+ * @returns 通行证业务响应
  */
-function getPassportHeaders(state, body) {
-    return {
-        'x-rpc-device_id': state.device_id,
-        'x-rpc-app_id': QR_APP_ID,
-        'x-rpc-device_name': state.device_name,
-        'x-rpc-device_fp': '38d7ee0e96649',
-        'x-rpc-device_model': state.device_model,
-        'x-rpc-app_version': APP_VERSION,
-        'x-rpc-game_biz': 'bbs_cn',
-        'x-rpc-sys_version': '11',
-        'x-rpc-aigis': '',
-        'Content-Type': 'application/json',
-        'x-rpc-client_type': '2',
-        DS: createDs('', body, PASS_SALT),
-        'x-rpc-sdk_version': '1.3.1.2',
-        'User-Agent': 'okhttp/4.8.0',
-        Connection: 'Keep-Alive',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'x-rpc-channel': 'appstore',
-    };
-}
-/** 使用最终请求体签名并发送 Passport 请求。
- * @param state 登录设备和取消信号
- * @param key 日志操作名
- * @param url 请求地址
- * @param body 请求对象
- * @returns 原始响应
- */
-async function postPassport(state, key, url, body) {
-    const bodyText = JSON.stringify(body);
-    const result = await httpJson(url, {
-        signal: state.signal,
-        key,
+async function postPassport(state, action, body) {
+    const response = await fetch(`${WEB_QR}/${action}`, {
         method: 'POST',
-        headers: getPassportHeaders(state, bodyText),
-        body: bodyText,
+        signal: AbortSignal.any([state.signal, AbortSignal.timeout(10000)]),
+        headers: {
+            Origin: 'https://user.mihoyo.com',
+            Referer: 'https://user.mihoyo.com/',
+            'Content-Type': 'application/json',
+            'User-Agent': WEB_UA,
+            'x-rpc-app_id': QR_APP_ID,
+            'x-rpc-client_type': '4',
+            'x-rpc-game_biz': 'hk4e_cn',
+            'x-rpc-sdk_version': '2.57.0',
+            'x-rpc-device_id': state.device_id,
+            'x-rpc-device_name': state.device_name,
+            'x-rpc-device_model': encodeURIComponent(state.device_model),
+            'x-rpc-device_os': 'Windows%2010%2064-bit',
+            'x-rpc-lifecycle_id': state.lifecycleId,
+            'x-rpc-mi_referrer': WEB_REFERRER,
+            Cookie: Array.from(state.cookies, ([key, value]) => `${key}=${value}`).join('; '),
+        },
+        body: JSON.stringify(body),
     });
-    return result.body;
-}
-/** 创建 App 登录二维码。
- * @param state 请求参数
- * @returns 操作结果
- */
-async function createQrLogin(state) {
-    const payload = await postPassport(state, 'app_create_qr_login', CREATE_QR_URL, {});
-    assertApiSuccess(payload, '创建 App 扫码二维码');
-    if (!payload.data?.ticket || !payload.data?.url) {
-        throw new Error('创建二维码成功响应中缺少 ticket 或 url');
+    if (!response.ok)
+        throw new Error(`米游社扫码请求失败：HTTP ${response.status}`);
+    for (const header of response.headers.getSetCookie()) {
+        const pair = header.split(';', 1)[0];
+        const separator = pair.indexOf('=');
+        if (separator < 1)
+            continue;
+        const key = pair.slice(0, separator);
+        const value = pair.slice(separator + 1);
+        if (value)
+            state.cookies.set(key, value);
+        else
+            state.cookies.delete(key);
     }
-    return payload.data;
+    return (await response.json());
 }
-/** 查询二维码状态。
- * @param state 请求参数
- * @param ticket 请求参数
- * @returns 操作结果
- */
-async function queryQrLoginStatus(state, ticket) {
-    return postPassport(state, 'app_query_qr_login_status', QUERY_QR_URL, { ticket });
-}
-/** 等待确认并提取已验证的 SToken 响应字段。
- * @param state 请求参数
- * @param ticket 请求参数
- * @param onStatus 请求参数
- * @returns 操作结果
+/** 等待手机确认，读取网页版登录 Cookie。
+ * @param state 扫码会话
+ * @param ticket 二维码票据
+ * @param onStatus 状态变化回调
+ * @returns 米游社账号、MID 和 V2 Cookie
  */
 async function waitForQrConfirmed(state, ticket, onStatus) {
     let previousStatus;
     while (true) {
-        const payload = await queryQrLoginStatus(state, ticket);
+        const payload = await postPassport(state, 'queryQRLoginStatus', { ticket });
         if (payload.retcode === -3501) {
             throw new Error('二维码已经过期，请重新扫码');
         }
         if (payload.retcode === -3505) {
             throw new Error('你在手机上取消了扫码登录');
         }
-        assertApiSuccess(payload, '查询 App 扫码状态');
+        assertApiSuccess(payload, '查询网页扫码状态');
         if (payload.data.status !== previousStatus) {
             previousStatus = payload.data.status;
             await onStatus?.(payload.data.status);
         }
         if (payload.data.status === 'Confirmed') {
-            const userInfo = payload.data.user_info;
-            const accountId = String(userInfo?.aid || userInfo?.uid || userInfo?.account_id || '');
-            const mid = userInfo?.mid;
-            const tokenInfo = payload.data.tokens?.find((item) => item.name === 'stoken' || item.name === 'stoken_v2') ??
-                payload.data.tokens?.[0];
-            const stoken = tokenInfo?.token;
-            if (!accountId || !mid || !stoken) {
-                throw new Error(`扫码已确认，但没有拿到完整 SToken 信息: accountId=${accountId ?? '-'}, mid=${mid ?? '-'}, tokens=${payload.data.tokens?.length ?? 0}`);
-            }
-            return { accountId, mid, stoken };
+            const accountId = String(payload.data.user_info?.aid || '');
+            const mid = payload.data.user_info?.mid;
+            const cookies = state.cookies;
+            if (!accountId || !mid || !cookies.get('ltoken_v2') || !cookies.get('cookie_token_v2'))
+                throw new Error('扫码已确认，响应缺少账号信息或 V2 登录凭据');
+            if (cookies.get('ltuid_v2') !== accountId || cookies.get('account_id_v2') !== accountId ||
+                cookies.get('ltmid_v2') !== mid || cookies.get('account_mid_v2') !== mid)
+                throw new Error('扫码响应中的 Cookie 与账号信息不一致');
+            const cookie = ACCOUNT_COOKIES.filter(key => cookies.has(key))
+                .map(key => `${key}=${cookies.get(key)}`).join('; ');
+            return { accountId, mid, cookie };
         }
         await sleep(POLL_INTERVAL_MS, undefined, { signal: state.signal });
     }
 }
-/** 使用已验证的 SToken 兑换 CK。
- * @param state 登录会话
- * @param login 已确认凭据
- * @returns Cookie Token
- */
-async function getCookieTokenBySToken(state, login) {
-    const query = new URLSearchParams({
-        game_biz: 'hk4e_cn',
-        stoken: login.stoken,
-        uid: login.accountId,
-        mid: login.mid,
-    });
-    const url = `${COOKIE_BY_STOKEN_URL}?${query}`;
-    const result = await httpJson(url, {
-        signal: state.signal,
-        key: 'get_cookie_token_by_stoken',
-        headers: {
-            Accept: 'application/json, text/plain, */*',
-            'User-Agent': `Mozilla/5.0 miHoYoBBS/${APP_VERSION}`,
-        },
-    });
-    const payload = result.body;
-    assertApiSuccess(payload, '使用 SToken 获取 Cookie Token');
-    const cookieToken = payload.data?.cookie_token;
-    if (!cookieToken) {
-        throw new Error('SToken 兑换成功响应中没有 cookie_token');
-    }
-    return cookieToken;
-}
-/** 按游戏查询绑定角色，保持 Demo 的请求结构。
- * @param state 登录会话
- * @param cookie 已兑换的完整 CK
+/**
+ * 使用网页 LToken 查询指定游戏的绑定角色。
+ * @param state 扫码会话
+ * @param cookie 网页登录 Cookie
  * @param gameBiz 游戏业务标识
- * @returns 角色列表
+ * @returns 账号的游戏角色列表
  */
 async function getGenshinRoles(state, cookie, gameBiz) {
-    const query = `game_biz=${gameBiz}`;
-    const url = `${GAME_ROLES_URL}?${query}`;
-    const result = await httpJson(url, {
-        signal: state.signal,
-        key: 'app_get_genshin_roles',
-        headers: {
-            Accept: 'application/json, text/plain, */*',
-            Cookie: cookie,
-            DS: createDs(query, '', DS2_SALT_4X),
-            'User-Agent': `Mozilla/5.0 (Linux; Android 16; wv) AppleWebKit/537.36 ` +
-                `Mobile Safari/537.36 miHoYoBBS/${APP_VERSION}`,
-            'x-rpc-app_version': APP_VERSION,
-            'x-rpc-client_type': '5',
-            'x-rpc-device_id': state.device_id,
-        },
+    const url = `${PASSPORT}/binding/api/getUserGameRolesByLtoken?game_biz=${gameBiz}`;
+    const response = await fetch(url, {
+        signal: AbortSignal.any([state.signal, AbortSignal.timeout(10000)]),
+        headers: { Cookie: cookie, Origin: 'https://act.mihoyo.com', Referer: 'https://act.mihoyo.com/', 'x-rpc-language': 'zh-cn' },
     });
-    const payload = result.body;
-    assertApiSuccess(payload, '获取绑定原神账号');
+    if (!response.ok)
+        throw new Error(`查询绑定角色失败：HTTP ${response.status}`);
+    const payload = (await response.json());
+    assertApiSuccess(payload, '查询绑定角色');
     if (!Array.isArray(payload.data?.list))
         throw new Error('角色查询响应缺少 list');
     return payload.data.list;
@@ -242,13 +171,21 @@ export async function startLogin(userId) {
     }, { once: true });
     try {
         const account = (await getAccounts(userId)).find((item) => item.login_device);
-        if (account?.login_device)
-            Object.assign(session.state, JSON.parse(account.login_device));
+        if (account?.login_device) {
+            const device = JSON.parse(account.login_device);
+            if (device.device_name === 'Chrome' && device.device_id)
+                session.state.device_id = device.device_id;
+        }
+        session.state.cookies.set('_MHYUUID', session.state.device_id);
+        session.state.cookies.set('MIHOYO_LOGIN_PLATFORM_LIFECYCLE_ID', session.state.lifecycleId);
         signal.throwIfAborted();
-        session.qr = await createQrLogin(session.state);
+        const qr = await postPassport(session.state, 'createQRLogin', {});
+        assertApiSuccess(qr, '创建网页扫码二维码');
+        if (!qr.data?.ticket || !qr.data.url)
+            throw new Error('创建二维码响应缺少 ticket 或 url');
+        session.qr = qr.data;
         session.image = await QRCode.toBuffer(session.qr.url, {
             width: QR_IMAGE_SIZE,
-            version: 11,
             margin: 2,
             errorCorrectionLevel: 'H',
         });
@@ -261,7 +198,7 @@ export async function startLogin(userId) {
         throw error;
     }
 }
-/** 等待扫码确认，兑换凭据并原子保存三游戏绑定。
+/** 等待网页扫码确认并原子保存凭据与三游戏绑定。
  * @param session 扫码会话
  * @param onStatus 状态变化提示
  * @returns 已保存账号及角色
@@ -275,15 +212,11 @@ export async function waitForLogin(session, onStatus) {
                 throw new Error('二维码尚未就绪');
             const state = session.state;
             const login = await waitForQrConfirmed(state, session.qr.ticket, onStatus);
-            const ltoken = await getLTokenBySToken(login.accountId, login.stoken, login.mid, state.signal);
-            const token = await getCookieTokenBySToken(state, login);
-            const cookie = `ltoken=${ltoken}; ltuid=${login.accountId}; cookie_token=${token}; account_id=${login.accountId}`;
             const roles = [];
             for (const biz of ['hk4e_cn', 'hkrpg_cn', 'nap_cn'])
-                roles.push(...(await getGenshinRoles(state, cookie, biz)));
+                roles.push(...(await getGenshinRoles(state, login.cookie, biz)));
             await saveLogin(session.userId, {
                 ...login,
-                cookie,
                 roles,
                 device: {
                     device_id: state.device_id,
